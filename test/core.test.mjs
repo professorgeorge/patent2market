@@ -1,0 +1,11 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {readFile} from 'node:fs/promises';import {rank,requirements,brief} from '../dist/core.js';
+const records=[{id:'a',title:'Water filtration',description:'Remove contaminants from water',category:'Environment'},{id:'b',title:'Thermal control',description:'Remove heat from electronics',category:'Energy'},{id:'c',title:'Cooling panels',description:'Cooling and heat transfer',category:'Energy'}];
+test('retrieves directly relevant technology first',()=>assert.equal(rank(records,'water filtration')[0].record.id,'a'));
+test('concept expansion bridges cooling and thermal',()=>assert.ok(rank(records,'thermal').some(r=>r.record.id==='c')));
+test('unmatched query does not fabricate recommendations',()=>assert.equal(rank(records,'xyzzy').length,0));
+test('empty queries browse all records without scores',()=>assert.equal(rank(records,'').length,3));
+test('ranking is repeatable and finite',()=>{assert.deepEqual(rank(records,'water thermal'),rank(records,'water thermal'));assert.ok(rank(records,'water').every(r=>Number.isFinite(r.score)));});
+test('constraints retain explicit requirements without inferring fulfillment',()=>assert.deepEqual(requirements('No power\n; Low mass'),['No power','Low mass']));
+test('brief includes provenance, uncertainty and notes',()=>{const text=brief([{...records[0],url:'https://example.com',retrievedAt:'2026-11-14',rights:'Unverified'}],'Clean water','No power',{a:'Ask about maintenance'});for(const part of ['https://example.com','not assessed','Ask about maintenance','No power'])assert.ok(text.includes(part));});
+test('catalog has unique identifiers and trusted source links',async()=>{const c=JSON.parse(await readFile(new URL('../dist/catalog.json',import.meta.url),'utf8'));assert.ok(c.records.length>100);assert.equal(new Set(c.records.map(r=>r.id)).size,c.records.length);for(const r of c.records){assert.equal(new URL(r.url).hostname,'technology.nasa.gov');assert.ok(r.title&&r.description&&r.retrievedAt);assert.ok(!/<[^>]+>/.test(r.title));}});
+test('all service worker assets exist',async()=>{for(const file of ['index.html','app.js','core.js','style.css','catalog.json','manifest.webmanifest','icon.svg','icon-192.png','icon-512.png'])assert.ok((await readFile(new URL('../dist/'+file,import.meta.url))).length);});
