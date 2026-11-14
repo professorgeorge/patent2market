@@ -1,3 +1,11 @@
+## 0.4.0 — 2026-11-14
+
+- Automatic installed Ollama detection, browser model preparation/progress, and session-only API entry for OpenAI, Anthropic, DeepSeek, Gemini and custom compatible services.
+- Removed bundled patent records, example buttons and financial defaults. Retired the offline catalog explorer.
+- Added source selection with live Lens/NASA connectors, external Google/EPO/WIPO search handoffs, and session Lens access.
+- Added country/region/sector/trade context, regulatory evidence and country-aware AI review/plan instructions.
+- Empty financial inputs remain unknown; plan exports retain planning context.
+
 ## 0.3.0 — 2026-11-14
 
 - Country-neutral discovery, optional Lens worldwide connector, and source-linked CN/JP references.
