@@ -952,3 +952,736 @@ export function generateBusinessModelCanvasHtml(project) {
 </body>
 </html>`;
 }
+
+// 1. Financial CSV Export Engine
+export function generateFinancialCsv(project) {
+  const p = project || {};
+  const fin = p.financial || {};
+  const f = financials(fin);
+  const curr = fin.currency || 'USD';
+  const sanitize = v => {
+    const s = String(v ?? '');
+    return s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r') ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+
+  const lines = [
+    ['PATENT2MARKET PRO-FORMA FINANCIAL MODEL & CASH FLOW SCHEDULE'],
+    ['Venture Name', sanitize(p.name || 'Patent2Market Venture')],
+    ['Operating Territory', sanitize(p.country || 'Target Market')],
+    ['Model Currency', curr],
+    ['Date Generated', new Date().toISOString().slice(0, 10)],
+    ['Attribution', 'Conceptualization & Development: Professor Babu George'],
+    [],
+    ['KEY UNIT ASSUMPTIONS & METRICS'],
+    ['Metric Description', 'Value', 'Units / Formula Note'],
+    ['Selling Price per Unit', fin.price || 0, curr],
+    ['Variable Cost of Goods Sold (Unit COGS)', fin.unitCost || 0, curr],
+    ['Unit Contribution Margin', (Number(fin.price || 0) - Number(fin.unitCost || 0)).toFixed(2), curr + ' per unit sold'],
+    ['Gross Contribution Margin (%)', f.margin !== null ? (f.margin * 100).toFixed(1) + '%' : 'N/A', 'Margin % of selling price'],
+    ['Month 1 Starting Volume', fin.monthlyUnits || 0, 'units sold in initial month'],
+    ['Monthly Growth Rate (%)', (fin.growth || 0) + '%', 'compounding month-over-month volume expansion'],
+    ['Monthly Fixed Operating Cost', fin.fixedCost || 0, curr + '/month (personnel, facility, overhead)'],
+    ['Upfront Launch Capex', fin.startupCost || 0, curr + ' (tooling, pilot inventory, legal)'],
+    ['Initial Starting Capital', fin.capital || 0, curr + ' (available founder / equity capital)'],
+    ['Monthly Break-Even Volume', f.breakEven !== null ? f.breakEven : 'N/A', 'units per month required to cover fixed burn'],
+    ['Year 1 Gross Billings', f.revenue || 0, curr],
+    ['Year 1 Net Operating Profit', f.profit || 0, curr],
+    ['Peak Funding Gap', f.fundingGap || 0, curr + ' (maximum cumulative cash trough)'],
+    [],
+    ['12-MONTH PRO-FORMA CASH FLOW SCHEDULE'],
+    ['Month', 'Units Sold', 'Gross Revenue (' + curr + ')', 'Variable Costs (' + curr + ')', 'Fixed Costs (' + curr + ')', 'Net Operating Profit (' + curr + ')', 'Ending Cash Balance (' + curr + ')']
+  ];
+
+  for (const m of f.months) {
+    lines.push([
+      `Month ${m.month}`,
+      m.units,
+      m.revenue,
+      m.variable,
+      m.fixed,
+      m.profit,
+      m.cash
+    ]);
+  }
+
+  lines.push([]);
+  lines.push(['3-YEAR GROWTH HORIZON PROJECTIONS']);
+  lines.push(['Horizon', 'Volume Scale Multiplier', 'Projected Revenue (' + curr + ')', 'Projected Operating Result (' + curr + ')', 'Commercial Milestone']);
+  lines.push(['Year 1: Launch & Validation', 'Base trajectory', f.revenue, f.profit, `Prove unit economics in primary corridor (${p.geography || p.country || 'local market'})`]);
+  lines.push(['Year 2: Regional Expansion', '2.4x volume', Math.round(f.revenue * 2.4), Math.round(f.profit > 0 ? f.profit * 2.8 : f.revenue * 0.18), 'Expand across secondary market clusters & regional aggregators']);
+  lines.push(['Year 3: Commercial Maturity', '4.5x volume', Math.round(f.revenue * 4.5), Math.round(f.profit > 0 ? f.profit * 5.2 : f.revenue * 0.35), 'Multi-territory distribution, licensing & fleet maintenance agreements']);
+
+  return lines.map(row => row.map(sanitize).join(',')).join('\r\n');
+}
+
+// 2. 1-Page Executive Summary / Investor One-Pager
+export function generateOnePager(project) {
+  const p = project || {};
+  const f = financials(p.financial || {});
+  const curr = p.financial?.currency || 'USD';
+  const money = n => `${curr} ${Math.round(n || 0).toLocaleString('en-US')}`;
+  const patents = selectedPatents(p);
+  const bp = generateSolutionBlueprint(p);
+
+  return {
+    name: p.name || 'Patent2Market Venture',
+    country: p.country || 'Target Market',
+    date: new Date().toISOString().slice(0, 10),
+    problem: p.problem || 'Significant unaddressed friction and cost loss in target sector.',
+    customer: p.customer || 'Commercial operators & regional users',
+    geography: p.geography ? `${p.geography}, ` : '' + (p.country || 'Target Region'),
+    sector: p.sector || 'Industrial & Commercial',
+    solution: p.offer || p.concept || 'Commercial turnkey solution based on verified patent mechanisms.',
+    concept: p.concept || 'Integrated modular technical solution architecture.',
+    advantage: p.advantage || 'Direct operational execution and local partner network.',
+    patents: patents.map(t => ({ id: t.id, title: t.title, subsystem: t.subsystem || 'Core Mechanism', status: t.statusLabel || t.access || 'Active' })),
+    cotsGaps: bp.gaps || [],
+    channel: p.channel || 'Direct B2B founder sales & key regional distributors',
+    metrics: {
+      price: money(p.financial?.price),
+      unitCost: money(p.financial?.unitCost),
+      margin: f.margin !== null ? Math.round(f.margin * 100) + '%' : 'N/A',
+      breakEven: f.breakEven !== null ? f.breakEven + ' units/mo' : 'N/A',
+      month1Units: p.financial?.monthlyUnits || 0,
+      year1Revenue: money(f.revenue),
+      year1Profit: money(f.profit),
+      fundingGap: money(f.fundingGap),
+      capital: money(p.financial?.capital)
+    },
+    theAsk: {
+      capitalNeeded: money(Math.max(f.fundingGap || 0, (p.financial?.startupCost || 0) * 1.5)),
+      useOfFunds: 'Initial tooling, COTS sub-assembly inventory, regulatory certification, and pilot deployment in primary corridor.'
+    },
+    milestones: [
+      'Month 1: 15 customer discovery interviews & dual-sourced supplier component quotes.',
+      'Month 2: Operational bench prototype integration & local standards certification check.',
+      'Month 3: 3-5 unit paid customer pilot deployment & commercial unit economics audit.'
+    ]
+  };
+}
+
+export function generateOnePagerHtml(project) {
+  const op = generateOnePager(project);
+  const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>${esc(op.name)} — Executive One-Pager</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      --primary: #163d36;
+      --primary-light: #21594f;
+      --accent: #2e7d32;
+      --bg: #f8faf7;
+      --card-bg: #ffffff;
+      --border: #d2ddcb;
+      --ink: #0f2c27;
+      --muted: #475569;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      padding: 24px;
+      line-height: 1.4;
+    }
+    .page-container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 32px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+    }
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      border-bottom: 2px solid var(--primary);
+      padding-bottom: 14px;
+      margin-bottom: 18px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .top-bar h1 {
+      font-size: 26px;
+      color: var(--primary);
+      margin: 2px 0;
+      letter-spacing: -0.5px;
+    }
+    .eyebrow {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .print-btn {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 9px 16px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 12.5px;
+      cursor: pointer;
+    }
+    .onepager-grid {
+      display: grid;
+      grid-template-columns: 1.25fr 0.95fr;
+      gap: 20px;
+    }
+    .section-title {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--primary);
+      font-weight: 700;
+      border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 4px;
+      margin: 14px 0 8px 0;
+    }
+    .section-title:first-child { margin-top: 0; }
+    p, li { font-size: 12px; color: #2c3e50; line-height: 1.5; }
+    ul { padding-left: 16px; margin: 4px 0; }
+    .metrics-callout-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin: 8px 0;
+    }
+    .metric-pill {
+      background: #f1f7f4;
+      border: 1px solid #cfe3d8;
+      border-radius: 6px;
+      padding: 8px 10px;
+    }
+    .metric-pill .lbl { font-size: 10px; text-transform: uppercase; color: #556b2f; font-weight: 600; }
+    .metric-pill .val { font-size: 16px; font-weight: 700; color: var(--primary); margin-top: 2px; }
+    .metric-pill .sub { font-size: 9.5px; color: var(--muted); }
+    .ip-box {
+      background: #fafdf9;
+      border-left: 3px solid var(--accent);
+      padding: 8px 10px;
+      border-radius: 0 4px 4px 0;
+      margin-top: 8px;
+    }
+    .footer {
+      margin-top: 20px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: var(--muted);
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .footer a { color: var(--primary); text-decoration: underline; }
+    @media (max-width: 720px) {
+      .onepager-grid { grid-template-columns: 1fr; }
+    }
+    @media print {
+      @page { size: portrait; margin: 8mm; }
+      body { background: white !important; padding: 0 !important; }
+      .page-container { border: none !important; box-shadow: none !important; padding: 0 !important; width: 100% !important; max-width: 100% !important; }
+      .print-btn { display: none !important; }
+      p, li { font-size: 10.5px !important; line-height: 1.4 !important; }
+      .metric-pill .val { font-size: 14px !important; }
+      .metric-pill { padding: 6px 8px !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page-container">
+    <div class="top-bar">
+      <div>
+        <span class="eyebrow">VENTURE EXECUTIVE TEASER · 1-PAGER</span>
+        <h1>${esc(op.name)}</h1>
+        <p style="font-size:12px;color:var(--muted);"><strong>Target Market:</strong> ${esc(op.country)} &nbsp;|&nbsp; <strong>Sector:</strong> ${esc(op.sector)} &nbsp;|&nbsp; <strong>Date:</strong> ${esc(op.date)}</p>
+      </div>
+      <div>
+        <button class="print-btn" onclick="window.print()">Print / Save as PDF 🖨</button>
+      </div>
+    </div>
+
+    <div class="onepager-grid">
+      <div>
+        <div class="section-title">The Problem &amp; Market Need</div>
+        <p><strong>Observed Friction:</strong> ${esc(op.problem)}</p>
+        <p style="margin-top:4px;"><strong>Target User &amp; Territory:</strong> ${esc(op.customer)} across ${esc(op.geography)}.</p>
+
+        <div class="section-title">The Commercial Solution</div>
+        <p><strong>Venture Offering:</strong> ${esc(op.solution)}</p>
+        <p style="margin-top:4px;"><strong>Functional Architecture:</strong> ${esc(op.concept)}</p>
+
+        <div class="section-title">Go-to-Market &amp; Distribution</div>
+        <p><strong>Initial Channel:</strong> ${esc(op.channel)}</p>
+        <p style="margin-top:4px;"><strong>Customer Acquisition Strategy:</strong> Phased pilot deployment with reference operators to establish local word-of-mouth and distribution leverage.</p>
+
+        <div class="section-title">90-Day Execution Roadmap</div>
+        <ul>
+          ${op.milestones.map(m => `<li>${esc(m)}</li>`).join('')}
+        </ul>
+      </div>
+
+      <div>
+        <div class="section-title">Unit Economics &amp; Pro-Forma</div>
+        <div class="metrics-callout-grid">
+          <div class="metric-pill">
+            <div class="lbl">Unit Price</div>
+            <div class="val">${esc(op.metrics.price)}</div>
+            <div class="sub">COGS: ${esc(op.metrics.unitCost)}</div>
+          </div>
+          <div class="metric-pill">
+            <div class="lbl">Gross Margin</div>
+            <div class="val">${esc(op.metrics.margin)}</div>
+            <div class="sub">Break-even: ${esc(op.metrics.breakEven)}</div>
+          </div>
+          <div class="metric-pill">
+            <div class="lbl">Year 1 Billings</div>
+            <div class="val">${esc(op.metrics.year1Revenue)}</div>
+            <div class="sub">Net profit: ${esc(op.metrics.year1Profit)}</div>
+          </div>
+          <div class="metric-pill">
+            <div class="lbl">Peak Cash Gap</div>
+            <div class="val">${esc(op.metrics.fundingGap)}</div>
+            <div class="sub">Starting cap: ${esc(op.metrics.capital)}</div>
+          </div>
+        </div>
+
+        <div class="section-title">Intellectual Property &amp; Defense</div>
+        <div class="ip-box">
+          ${op.patents.length ? op.patents.map(t => `<div style="font-size:11px;margin-bottom:4px;"><strong>[${esc(t.id)}]</strong> ${esc(t.title)}<br><small style="color:#64748b;">Role: ${esc(t.subsystem)} · Status: ${esc(t.status)}</small></div>`).join('') : '<p style="font-size:11px;">Proprietary modular architecture leveraging documented open engineering standards.</p>'}
+          ${op.cotsGaps.length ? `<div style="font-size:10.5px;color:#1b5e20;margin-top:6px;border-top:1px dashed #d2ddcb;padding-top:4px;"><strong>AI Gap-Fills:</strong> ${op.cotsGaps.slice(0, 2).map(g => esc(g.subsystem)).join(', ')} (COTS off-the-shelf)</div>` : ''}
+        </div>
+
+        <div class="section-title">Founder Capability &amp; The Ask</div>
+        <p><strong>Founder Advantage:</strong> ${esc(op.advantage)}</p>
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;padding:8px 10px;border-radius:6px;margin-top:6px;">
+          <div style="font-size:11px;font-weight:700;color:var(--primary);">Capital Requirement: ${esc(op.theAsk.capitalNeeded)}</div>
+          <div style="font-size:10.5px;color:var(--muted);">${esc(op.theAsk.useOfFunds)}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <span>Grounded in verified patents, documented market evidence &amp; calibrated unit economics.</span>
+      <span>Conceptualization and development: <a href="https://www.linkedin.com/in/beingbabu/" target="_blank" rel="noopener noreferrer">Professor Babu George</a></span>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+// 3. "Skeptical Investor" Q&A Simulator / Shark Tank Stress-Test
+export function generateInvestorQa(project) {
+  const p = project || {};
+  const f = financials(p.financial || {});
+  const curr = p.financial?.currency || 'USD';
+  const money = n => `${curr} ${Math.round(n || 0).toLocaleString('en-US')}`;
+  const patents = selectedPatents(p);
+
+  return [
+    {
+      num: 1,
+      topic: 'Customer Inertia & Willingness to Pay',
+      question: `Why won't ${p.customer || 'target customers'} in ${p.country || 'your market'} simply stick to cheap informal workarounds or existing manual methods rather than paying ${money(p.financial?.price)} for your solution?`,
+      whyInvestorAsks: 'Investors want to know whether your product is an indispensable "painkiller" or merely a "nice-to-have" novelty that customers will delay adopting.',
+      suggestedAnswer: `While manual workarounds appear inexpensive upfront, they impose severe hidden costs: ${p.problem || 'high operational waste and product losses'}. At our unit price of ${money(p.financial?.price)}, our solution generates a positive net economic return for the operator within the first quarter of deployment. We test this through structured paid field pilots before scaling.`,
+      actionToValidate: 'Conduct 10 price-sensitivity interviews with prospective customers using the Van Westendorp Price Sensitivity Meter.'
+    },
+    {
+      num: 2,
+      topic: 'IP Defensibility & Moat',
+      question: patents.length
+        ? `You cite patent ${patents[0].id} as your core technology. If that patent is licensed, expired, or narrow in scope, what prevents a well-funded regional competitor from cloning your product in 6 months?`
+        : 'Without proprietary patents, what prevents a low-cost manufacturer from copying your system architecture immediately?',
+      whyInvestorAsks: 'Skeptical investors probe whether you have a true sustainable competitive advantage or just an easily replicable hardware box.',
+      suggestedAnswer: `Our defensibility does not rely on a single patent claim in isolation. It relies on our proprietary system synthesis: coupling the core mechanism with off-the-shelf COTS components, custom firmware control loops, localized ruggedization (${p.localContext ? p.localContext.slice(0, 80) : 'local field constraints'}), and direct distribution relationships in ${p.country || 'our launch territory'}. A copycat still lacks the local integration know-how and service infrastructure.`,
+      actionToValidate: 'Perform a Freedom-to-Operate (FTO) review and file trade secret documentation for your integration firmware.'
+    },
+    {
+      num: 3,
+      topic: 'Unit Margin Erosion & Supply Chain Shocks',
+      question: `Your unit cost is modeled at ${money(p.financial?.unitCost)}, yielding a ${f.margin !== null ? Math.round(f.margin * 100) + '%' : 'healthy'} gross margin. What happens to your business if import tariffs, component shortages, or freight spikes increase your COGS by 35%?`,
+      whyInvestorAsks: 'Hardware and physical ventures regularly see early margin erosion due to small-batch production and supply chain volatility.',
+      suggestedAnswer: `Our modular architecture is specifically engineered to utilize standard COTS (commercial off-the-shelf) components that can be dual-sourced globally or fabricated locally. In our downside sensitivity model (testing a 40% volume reduction and cost inflation), our unit contribution remains positive at ${money(Math.round((p.financial?.price || 0) - (p.financial?.unitCost || 0) * 1.35))}, ensuring the venture covers variable costs even under adverse supply chain shocks.`,
+      actionToValidate: 'Obtain binding written quotes from at least two independent suppliers for every major BOM component.'
+    },
+    {
+      num: 4,
+      topic: 'Distribution Bandwidth & CAC',
+      question: `Reaching customers in ${p.geography || p.country || 'emerging corridors'} requires significant on-the-ground presence. How will you avoid customer acquisition costs (CAC) exceeding your lifetime value (LTV)?`,
+      whyInvestorAsks: 'Most hardware and deep-tech startups fail at distribution, not engineering. Direct sales can rapidly exhaust starting capital.',
+      suggestedAnswer: `We do not build an expensive standalone direct sales force from scratch. Instead, we leverage ${p.channel || 'established local agricultural cooperatives and distributor hubs'} who already hold trusted weekly customer relationships. By structuring referral incentives and demonstrating units at regional gatherings, our CAC is minimized through existing aggregation channels.`,
+      actionToValidate: 'Secure an LOI (Letter of Intent) or memorandum of understanding with at least 1 regional distributor or association.'
+    },
+    {
+      num: 5,
+      topic: 'Cash Runway & Peak Funding Deficit',
+      question: `You project a peak funding deficit of ${money(f.fundingGap)} before reaching cash flow breakeven (${f.breakEven !== null ? f.breakEven + ' units/month' : 'modeled volume'}). What is your contingency plan if adoption takes twice as long?`,
+      whyInvestorAsks: 'Investors want to confirm that you understand your cash burn rate and have survival levers that avoid premature insolvency.',
+      suggestedAnswer: `Our monthly fixed overhead is lean at ${money(p.financial?.fixedCost)}/month. Because we utilize modular assembly rather than building our own factory, our Capex is variable and scalable. If adoption delays occur, we can maintain operations on lean founder mode while focusing entirely on converting our 5 initial pilot accounts into paid references.`,
+      actionToValidate: 'Maintain at least a 30% capital safety buffer above the modeled peak funding gap before full commercial rollout.'
+    }
+  ];
+}
+
+export function generateInvestorQaHtml(project) {
+  const qaList = generateInvestorQa(project);
+  const p = project || {};
+  const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>${esc(p.name || 'Venture')} — Skeptical Investor Q&A Simulator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      --primary: #163d36;
+      --accent: #2e7d32;
+      --bg: #f8faf7;
+      --border: #d2ddcb;
+      --ink: #0f2c27;
+      --muted: #475569;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--ink); padding: 24px; line-height: 1.45; }
+    .container { max-width: 900px; margin: 0 auto; background: #ffffff; border: 1px solid var(--border); border-radius: 10px; padding: 30px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+    .header { border-bottom: 2px solid var(--primary); padding-bottom: 14px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; }
+    .header h1 { font-size: 24px; color: var(--primary); margin: 2px 0; }
+    .eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; color: var(--accent); }
+    .print-btn { background: var(--primary); color: white; border: none; padding: 8px 14px; border-radius: 6px; font-weight: 600; font-size: 12px; cursor: pointer; }
+    .qa-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px; margin-bottom: 16px; border-left: 4px solid var(--primary); }
+    .qa-num { font-size: 11px; text-transform: uppercase; font-weight: 700; color: var(--accent); letter-spacing: 0.5px; }
+    .qa-q { font-size: 15px; font-weight: 700; color: #0f2c27; margin: 6px 0 10px 0; line-height: 1.35; }
+    .qa-why { font-size: 11.5px; color: #64748b; background: #f8fafc; padding: 8px 10px; border-radius: 4px; margin-bottom: 10px; font-style: italic; }
+    .qa-ans { font-size: 13px; color: #1e293b; line-height: 1.5; margin-bottom: 10px; }
+    .qa-test { font-size: 11px; color: #1b5e20; background: #f0fdf4; border: 1px solid #bbf7d0; padding: 6px 10px; border-radius: 4px; }
+    .footer { margin-top: 24px; padding-top: 14px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--muted); flex-wrap: wrap; gap: 8px; }
+    .footer a { color: var(--primary); text-decoration: underline; }
+    @media print {
+      @page { margin: 10mm; }
+      body { background: white !important; padding: 0 !important; }
+      .container { border: none !important; box-shadow: none !important; padding: 0 !important; }
+      .print-btn { display: none !important; }
+      .qa-card { page-break-inside: avoid !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div>
+        <span class="eyebrow">DILIGENCE &amp; DEFENSE PREPARATION</span>
+        <h1>Skeptical Investor Q&amp;A Simulator</h1>
+        <p style="font-size:12px;color:var(--muted);">Venture: <strong>${esc(p.name || 'Patent2Market Venture')}</strong> &nbsp;|&nbsp; Target Territory: <strong>${esc(p.country || 'Target Market')}</strong></p>
+      </div>
+      <div>
+        <button class="print-btn" onclick="window.print()">Print / Save as PDF 🖨</button>
+      </div>
+    </div>
+
+    <div style="font-size:12.5px;color:#334155;margin-bottom:18px;">
+      Investors and grant panels test your resilience by probing the 5 most fragile assumptions in your venture model. Review these rebuttals and execute the validation experiments before your next pitch.
+    </div>
+
+    ${qaList.map(item => `
+      <div class="qa-card">
+        <div class="qa-num">Question ${item.num} · ${esc(item.topic)}</div>
+        <div class="qa-q">"${esc(item.question)}"</div>
+        <div class="qa-why"><strong>Why the Investor Probes This:</strong> ${esc(item.whyInvestorAsks)}</div>
+        <div class="qa-ans"><strong>Evidence-Based Rebuttal:</strong> ${esc(item.suggestedAnswer)}</div>
+        <div class="qa-test"><strong>Validation Experiment:</strong> ${esc(item.actionToValidate)}</div>
+      </div>
+    `).join('')}
+
+    <div class="footer">
+      <span>Calibrated specifically from your venture inputs, patents &amp; financial scenarios.</span>
+      <span>Conceptualization and development: <a href="https://www.linkedin.com/in/beingbabu/" target="_blank" rel="noopener noreferrer">Professor Babu George</a></span>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+// 4. University Tech Transfer (TTO) Licensing Term Sheet Guide & Checklist
+export function generateTtoTermSheetGuide(project) {
+  const p = project || {};
+  const patents = selectedPatents(p);
+  const curr = p.financial?.currency || 'USD';
+
+  return {
+    ventureName: p.name || 'Patent2Market Venture',
+    country: p.country || 'Target Territory',
+    date: new Date().toISOString().slice(0, 10),
+    patents: patents.map(t => ({
+      id: t.id,
+      title: t.title,
+      jurisdiction: t.jurisdiction || 'US',
+      access: t.statusLabel || t.access || 'Status unconfirmed',
+      terms: t.costTerms || 'Standard academic / non-profit licensing framework'
+    })),
+    benchmarks: [
+      {
+        term: 'Upfront Option / Evaluation Fee',
+        benchmark: '$1,000 – $5,000 (for a 12–18 month exclusive evaluation period)',
+        guidance: 'Do not pay large upfront license fees before achieving commercial validation. Request an "Option Agreement" allowing bench integration without upfront royalties.'
+      },
+      {
+        term: 'Running Royalty on Net Sales',
+        benchmark: '2.0% – 3.5% of Net Sales for hardware & mechanical systems',
+        guidance: 'Ensure "Net Sales" strictly deducts customer shipping, import duties, bad debt, sales taxes, and returned goods.'
+      },
+      {
+        term: 'Minimum Annual Royalties (MARs)',
+        benchmark: '$0 in Years 1–2; ramping to $5,000/yr only after commercial launch',
+        guidance: 'Negotiate for MARs to begin only after the first commercial sale in the licensed territory, creditable against that year\'s running royalties.'
+      },
+      {
+        term: 'Milestone Payments',
+        benchmark: 'Tied strictly to technical proof-of-concept and commercial revenue targets',
+        guidance: 'Avoid calendar-based milestones. Use achievement milestones: e.g. $10,000 upon successful field pilot; $25,000 upon reaching $500,000 in gross revenue.'
+      },
+      {
+        term: 'Patent Prosecution & Maintenance Costs',
+        benchmark: 'Capped at $5,000 – $10,000; payable out of 20% of annual operating profits',
+        guidance: 'Never agree to open-ended reimbursement of past university patent prosecution legal bills without an absolute dollar cap.'
+      },
+      {
+        term: 'Sublicensing Royalty Split',
+        benchmark: '10% – 20% of non-royalty sublicensing revenue',
+        guidance: 'Standard university agreements ask for 20-30%. Keep it capped at 15-20% to retain distribution flexibility.'
+      }
+    ],
+    pitfalls: [
+      'Trap 1: Accepting uncapped reimbursement of university historic patent legal fees.',
+      'Trap 2: Overly narrow Field-of-Use restrictions that prevent horizontal market expansion.',
+      'Trap 3: Strict "diligence forfeiture" clauses that revoke rights if product certification is delayed.',
+      'Trap 4: Royalty stacking without a minimum floor (ensure royalty reduces if third-party licenses are required).'
+    ]
+  };
+}
+
+export function generateTtoTermSheetGuideHtml(project) {
+  const tto = generateTtoTermSheetGuide(project);
+  const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>${esc(tto.ventureName)} — University TTO Licensing Guide &amp; Term Sheet</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      --primary: #163d36;
+      --accent: #2e7d32;
+      --bg: #f8faf7;
+      --border: #d2ddcb;
+      --ink: #0f2c27;
+      --muted: #475569;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--ink); padding: 24px; line-height: 1.45; }
+    .container { max-width: 900px; margin: 0 auto; background: #ffffff; border: 1px solid var(--border); border-radius: 10px; padding: 30px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+    .header { border-bottom: 2px solid var(--primary); padding-bottom: 14px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; }
+    .header h1 { font-size: 24px; color: var(--primary); margin: 2px 0; }
+    .eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; color: var(--accent); }
+    .print-btn { background: var(--primary); color: white; border: none; padding: 8px 14px; border-radius: 6px; font-weight: 600; font-size: 12px; cursor: pointer; }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0 18px 0; font-size: 12px; }
+    th { background: #f1f7f4; color: var(--primary); font-weight: 700; text-align: left; padding: 8px 10px; border: 1px solid #d2ddcb; }
+    td { padding: 8px 10px; border: 1px solid #e2e8f0; color: #2c3e50; vertical-align: top; }
+    .section-title { font-size: 13px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--primary); font-weight: 700; margin: 18px 0 8px 0; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; }
+    .pitfall-box { background: #fef2f2; border-left: 4px solid #ef4444; padding: 10px 14px; border-radius: 0 6px 6px 0; margin-bottom: 14px; font-size: 12px; }
+    .footer { margin-top: 24px; padding-top: 14px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--muted); flex-wrap: wrap; gap: 8px; }
+    .footer a { color: var(--primary); text-decoration: underline; }
+    @media print {
+      @page { margin: 10mm; }
+      body { background: white !important; padding: 0 !important; }
+      .container { border: none !important; box-shadow: none !important; padding: 0 !important; }
+      .print-btn { display: none !important; }
+      table { page-break-inside: avoid !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div>
+        <span class="eyebrow">IP NEGOTIATION PLAYBOOK</span>
+        <h1>University TTO Licensing Guide &amp; Term Sheet</h1>
+        <p style="font-size:12px;color:var(--muted);">Venture: <strong>${esc(tto.ventureName)}</strong> &nbsp;|&nbsp; Target Jurisdiction: <strong>${esc(tto.country)}</strong> &nbsp;|&nbsp; Date: <strong>${esc(tto.date)}</strong></p>
+      </div>
+      <div>
+        <button class="print-btn" onclick="window.print()">Print / Save as PDF 🖨</button>
+      </div>
+    </div>
+
+    <div style="font-size:12.5px;color:#334155;margin-bottom:16px;">
+      When acquiring commercial rights to university, federal laboratory, or corporate patent technology, use this term sheet guide to establish defensible licensing terms and protect your startup's cash runway.
+    </div>
+
+    <div class="section-title">1. Selected Patent Portfolio Status</div>
+    <table>
+      <thead><tr><th>Patent ID</th><th>Invention Title</th><th>Jurisdiction</th><th>Current Access Basis</th></tr></thead>
+      <tbody>
+        ${tto.patents.length ? tto.patents.map(t => `<tr><td><strong>${esc(t.id)}</strong></td><td>${esc(t.title)}</td><td>${esc(t.jurisdiction)}</td><td><span style="font-size:11px;background:#e8f5e9;color:#1b5e20;padding:2px 6px;border-radius:4px;">${esc(t.access)}</span></td></tr>`).join('') : '<tr><td colspan="4">No patents selected. Add patents in Step 1 to generate customized licensing assessments.</td></tr>'}
+      </tbody>
+    </table>
+
+    <div class="section-title">2. Recommended Deep-Tech &amp; Hardware Licensing Benchmarks</div>
+    <table>
+      <thead><tr><th style="width:28%;">Deal Term</th><th style="width:36%;">Industry Benchmark</th><th>Negotiation Guidance</th></tr></thead>
+      <tbody>
+        ${tto.benchmarks.map(b => `<tr><td><strong>${esc(b.term)}</strong></td><td>${esc(b.benchmark)}</td><td>${esc(b.guidance)}</td></tr>`).join('')}
+      </tbody>
+    </table>
+
+    <div class="section-title">3. Critical Negotiation Pitfalls to Avoid</div>
+    <div class="pitfall-box">
+      <ul style="padding-left:16px;margin:0;">
+        ${tto.pitfalls.map(p => `<li style="margin-bottom:4px;">${esc(p)}</li>`).join('')}
+      </ul>
+    </div>
+
+    <div class="footer">
+      <span>Industry-standard benchmarks adapted for physical, deep-tech and resource-constrained ventures.</span>
+      <span>Conceptualization and development: <a href="https://www.linkedin.com/in/beingbabu/" target="_blank" rel="noopener noreferrer">Professor Babu George</a></span>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+// 5. Grant & SBIR/STTR "Specific Aims" Concept Note Generator
+export function generateGrantConceptNote(project) {
+  const p = project || {};
+  const f = financials(p.financial || {});
+  const patents = selectedPatents(p);
+  const bp = generateSolutionBlueprint(p);
+
+  return {
+    title: `Commercialization of ${patents.length ? `[${patents[0].id}] ` : ''}Modular Systems for ${p.problem ? p.problem.slice(0, 80) : 'Sustainable Infrastructure'} in ${p.country || 'Target Region'}`,
+    agencyTopic: `${p.sector || 'Energy & Agriculture'} · Phase I SBIR/STTR Technical Innovation & Feasibility`,
+    significance: p.problem || 'Significant unaddressed efficiency and post-harvest economic losses in target operating regions.',
+    innovation: `Synergistic integration of verified patent mechanisms (${patents.map(t => t.id).join(', ') || 'proprietary core mechanics'}) coupled with ${bp.gaps?.length ? bp.gaps.map(g => g.subsystem).join(', ') : 'modular off-the-shelf control and power subsystems'} optimized for local environmental durability (${p.localContext ? p.localContext.slice(0, 100) : 'rugged field conditions'}).`,
+    aim1: {
+      title: 'Specific Aim 1: System Integration & Bench Proof-of-Concept',
+      description: 'Integrate the patented core mechanism with auxiliary power conditioning and closed-loop control units. Validate functional performance, energy efficiency, and operational tolerances on a standardized test bench.',
+      successCriteria: 'Demonstrate functional operation meeting 90%+ of modeled efficiency targets across 100 continuous operational test cycles.'
+    },
+    aim2: {
+      title: 'Specific Aim 2: Environmental Stress & Local Robustness Benchmarking',
+      description: `Subject the integrated prototype to simulated local operating conditions characteristic of ${p.country || 'the operating territory'} (${p.constraints || 'dust, ambient temperature swings, and intermittent power'}). Benchmark performance against existing baseline equipment.`,
+      successCriteria: 'Zero critical subsystem failures under elevated temperature and dust stress; prove at least 25% superior efficiency over baseline alternatives.'
+    },
+    aim3: {
+      title: 'Specific Aim 3: Field Pilot Demonstration & Commercial Feasibility',
+      description: `Deploy 3 pilot demonstration units with reference partner operators in ${p.geography || p.country || 'the primary target corridor'}. Gather user feedback, maintenance intervals, and willingness-to-pay validation.`,
+      successCriteria: 'At least 80% operator satisfaction; verified daily operational uptime exceeding 95%; signed commercial Letters of Intent (LOIs).'
+    },
+    phaseExit: 'Successful completion of Aims 1–3 produces a certified commercial prototype, validated unit economics, and customer pilot data necessary for Phase II manufacturing scale-up.'
+  };
+}
+
+export function generateGrantConceptNoteHtml(project) {
+  const g = generateGrantConceptNote(project);
+  const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>${esc(g.title)} — Grant Concept Note</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      --primary: #163d36;
+      --accent: #2e7d32;
+      --bg: #f8faf7;
+      --border: #d2ddcb;
+      --ink: #0f2c27;
+      --muted: #475569;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--ink); padding: 24px; line-height: 1.5; }
+    .container { max-width: 900px; margin: 0 auto; background: #ffffff; border: 1px solid var(--border); border-radius: 10px; padding: 32px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+    .header { border-bottom: 2px solid var(--primary); padding-bottom: 14px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; }
+    .header h1 { font-size: 21px; color: var(--primary); margin: 4px 0 2px 0; line-height: 1.3; }
+    .eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; color: var(--accent); }
+    .print-btn { background: var(--primary); color: white; border: none; padding: 8px 14px; border-radius: 6px; font-weight: 600; font-size: 12px; cursor: pointer; }
+    .section-title { font-size: 13px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--primary); font-weight: 700; margin: 18px 0 8px 0; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; }
+    .aim-box { background: #fafdf9; border-left: 3px solid var(--accent); padding: 12px 14px; border-radius: 0 6px 6px 0; margin-bottom: 14px; }
+    .aim-title { font-size: 13.5px; font-weight: 700; color: var(--primary); margin-bottom: 4px; }
+    .aim-desc { font-size: 12px; color: #2c3e50; line-height: 1.45; margin-bottom: 6px; }
+    .aim-success { font-size: 11px; color: #166534; background: #dcfce7; padding: 4px 8px; border-radius: 4px; display: inline-block; font-weight: 600; }
+    .footer { margin-top: 24px; padding-top: 14px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--muted); flex-wrap: wrap; gap: 8px; }
+    .footer a { color: var(--primary); text-decoration: underline; }
+    @media print {
+      @page { margin: 10mm; }
+      body { background: white !important; padding: 0 !important; }
+      .container { border: none !important; box-shadow: none !important; padding: 0 !important; }
+      .print-btn { display: none !important; }
+      .aim-box { page-break-inside: avoid !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div>
+        <span class="eyebrow">NON-DILUTIVE CAPITAL · GRANT &amp; SBIR CONCEPT NOTE</span>
+        <h1>${esc(g.title)}</h1>
+        <p style="font-size:12px;color:var(--muted);">Target Agency / Track: <strong>${esc(g.agencyTopic)}</strong></p>
+      </div>
+      <div>
+        <button class="print-btn" onclick="window.print()">Print / Save as PDF 🖨</button>
+      </div>
+    </div>
+
+    <div class="section-title">1. Significance &amp; Unmet Need</div>
+    <p style="font-size:12.5px;color:#2c3e50;">${esc(g.significance)}</p>
+
+    <div class="section-title">2. Technical Innovation &amp; Modular Solution Architecture</div>
+    <p style="font-size:12.5px;color:#2c3e50;">${esc(g.innovation)}</p>
+
+    <div class="section-title">3. Specific Aims (Phase I Workplan)</div>
+    <div class="aim-box">
+      <div class="aim-title">${esc(g.aim1.title)}</div>
+      <div class="aim-desc">${esc(g.aim1.description)}</div>
+      <div class="aim-success">Phase I Target: ${esc(g.aim1.successCriteria)}</div>
+    </div>
+
+    <div class="aim-box">
+      <div class="aim-title">${esc(g.aim2.title)}</div>
+      <div class="aim-desc">${esc(g.aim2.description)}</div>
+      <div class="aim-success">Phase I Target: ${esc(g.aim2.successCriteria)}</div>
+    </div>
+
+    <div class="aim-box">
+      <div class="aim-title">${esc(g.aim3.title)}</div>
+      <div class="aim-desc">${esc(g.aim3.description)}</div>
+      <div class="aim-success">Phase I Target: ${esc(g.aim3.successCriteria)}</div>
+    </div>
+
+    <div class="section-title">4. Phase I Exit Criteria &amp; Commercial Transition</div>
+    <p style="font-size:12.5px;color:#2c3e50;">${esc(g.phaseExit)}</p>
+
+    <div class="footer">
+      <span>Standard Phase I SBIR / STTR concept note format. Ready for federal or foundation submission.</span>
+      <span>Conceptualization and development: <a href="https://www.linkedin.com/in/beingbabu/" target="_blank" rel="noopener noreferrer">Professor Babu George</a></span>
+    </div>
+  </div>
+</body>
+</html>`;
+}

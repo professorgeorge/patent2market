@@ -1,6 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createZip, buildDocx, generateWordHtml, pitchDeckSlides, generateBusinessModelCanvas, generateBusinessModelCanvasHtml } from '../dist/word-export.js';
+import {
+  createZip,
+  buildDocx,
+  generateWordHtml,
+  pitchDeckSlides,
+  generateBusinessModelCanvas,
+  generateBusinessModelCanvasHtml,
+  generateFinancialCsv,
+  generateOnePager,
+  generateOnePagerHtml,
+  generateInvestorQa,
+  generateInvestorQaHtml,
+  generateTtoTermSheetGuide,
+  generateTtoTermSheetGuideHtml,
+  generateGrantConceptNote,
+  generateGrantConceptNoteHtml
+} from '../dist/word-export.js';
 import { classifySubsystem } from '../dist/patents.js';
 import { newProject, draftPlan, heuristicFinancials, heuristicEvidence } from '../dist/venture-core.js';
 import { googleRecord } from '../server/patents.mjs';
@@ -175,4 +191,150 @@ test('generateBusinessModelCanvasHtml produces valid standalone HTML with embedd
   assert.match(html, /@media print/);
   assert.match(html, /Professor Babu George/);
   assert.match(html, /https:\/\/www\.linkedin\.com\/in\/beingbabu\//);
+});
+
+test('generateFinancialCsv exports valid formatted CSV with metrics, 12-month cash flows, and 3-year projections', () => {
+  const p = newProject();
+  p.name = 'SolarCool Rift';
+  p.country = 'Kenya';
+  p.financial = heuristicFinancials(p);
+
+  const csv = generateFinancialCsv(p);
+  assert.ok(typeof csv === 'string');
+  assert.match(csv, /PATENT2MARKET PRO-FORMA FINANCIAL MODEL/);
+  assert.match(csv, /SolarCool Rift/);
+  assert.match(csv, /Kenya/);
+  assert.match(csv, /Selling Price per Unit/);
+  assert.match(csv, /12-MONTH PRO-FORMA CASH FLOW SCHEDULE/);
+  assert.match(csv, /Month 1/);
+  assert.match(csv, /Month 12/);
+  assert.match(csv, /3-YEAR GROWTH HORIZON PROJECTIONS/);
+  assert.match(csv, /Professor Babu George/);
+
+  // Validate CSV structure: each row has commas
+  const rows = csv.split('\r\n');
+  assert.ok(rows.length > 25);
+  const m1Row = rows.find(r => r.startsWith('Month 1,'));
+  assert.ok(m1Row, 'Month 1 cash flow row missing');
+  assert.equal(m1Row.split(',').length, 7, 'Month 1 row should have 7 columns');
+});
+
+test('generateOnePager and generateOnePagerHtml produce structured 1-page executive teaser', () => {
+  const p = newProject();
+  p.name = 'AquaHarvest India';
+  p.problem = 'Arsenic contamination in drinking water for rural families';
+  p.customer = 'Rural village panchayats';
+  p.country = 'India';
+  p.financial = heuristicFinancials(p);
+  p.technologies = [
+    googleRecord({
+      publication_number: 'US1234567B1',
+      title: 'Solar Water Still with Condensation Matrix',
+      snippet: 'Desalination and purification via solar thermal evaporator',
+      family_metadata: { aggregated: { country_status: [{ country_code: 'US', best_patent_stage: { state: 'ACTIVE' } }] } }
+    })
+  ];
+
+  const op = generateOnePager(p);
+  assert.equal(op.name, 'AquaHarvest India');
+  assert.equal(op.country, 'India');
+  assert.ok(op.metrics.price);
+  assert.ok(op.patents.length === 1);
+  assert.equal(op.patents[0].id, 'US1234567B1');
+  assert.ok(op.milestones.length >= 3);
+
+  const html = generateOnePagerHtml(p);
+  assert.match(html, /<!doctype html>/i);
+  assert.match(html, /AquaHarvest India/);
+  assert.match(html, /VENTURE EXECUTIVE TEASER · 1-PAGER/);
+  assert.match(html, /US1234567B1/);
+  assert.match(html, /Unit Price/);
+  assert.match(html, /Gross Margin/);
+  assert.match(html, /@media print/);
+  assert.match(html, /Professor Babu George/);
+});
+
+test('generateInvestorQa and generateInvestorQaHtml produce 5 sharp investor rebuttals and validation tests', () => {
+  const p = newProject();
+  p.name = 'BioShield Africa';
+  p.problem = 'Crop post-harvest insect loss';
+  p.customer = 'Smallholder grain aggregators';
+  p.country = 'Nigeria';
+  p.financial = heuristicFinancials(p);
+
+  const qaList = generateInvestorQa(p);
+  assert.equal(qaList.length, 5);
+  for (const q of qaList) {
+    assert.ok(q.num);
+    assert.ok(q.topic);
+    assert.ok(q.question);
+    assert.ok(q.whyInvestorAsks);
+    assert.ok(q.suggestedAnswer);
+    assert.ok(q.actionToValidate);
+  }
+
+  const html = generateInvestorQaHtml(p);
+  assert.match(html, /<!doctype html>/i);
+  assert.match(html, /Skeptical Investor Q&amp;A Simulator/);
+  assert.match(html, /BioShield Africa/);
+  assert.match(html, /Customer Inertia &amp; Willingness to Pay/);
+  assert.match(html, /Evidence-Based Rebuttal/);
+  assert.match(html, /Validation Experiment/);
+  assert.match(html, /Professor Babu George/);
+});
+
+test('generateTtoTermSheetGuide and generateTtoTermSheetGuideHtml produce actionable university licensing benchmarks', () => {
+  const p = newProject();
+  p.name = 'CoolCell Lab';
+  p.country = 'United States';
+  p.technologies = [
+    googleRecord({
+      publication_number: 'US9988776B2',
+      title: 'Phase Change Cooling Cartridge',
+      snippet: 'High thermal capacity matrix for cold chain',
+      family_metadata: { aggregated: { country_status: [{ country_code: 'US', best_patent_stage: { state: 'ACTIVE' } }] } }
+    })
+  ];
+
+  const tto = generateTtoTermSheetGuide(p);
+  assert.equal(tto.ventureName, 'CoolCell Lab');
+  assert.equal(tto.patents.length, 1);
+  assert.equal(tto.patents[0].id, 'US9988776B2');
+  assert.ok(tto.benchmarks.length >= 5);
+  assert.ok(tto.pitfalls.length >= 4);
+
+  const html = generateTtoTermSheetGuideHtml(p);
+  assert.match(html, /<!doctype html>/i);
+  assert.match(html, /University TTO Licensing Guide &amp; Term Sheet/);
+  assert.match(html, /US9988776B2/);
+  assert.match(html, /Running Royalty on Net Sales/);
+  assert.match(html, /Minimum Annual Royalties/);
+  assert.match(html, /Critical Negotiation Pitfalls to Avoid/);
+  assert.match(html, /Professor Babu George/);
+});
+
+test('generateGrantConceptNote and generateGrantConceptNoteHtml produce Phase I SBIR Specific Aims workplan', () => {
+  const p = newProject();
+  p.name = 'DesiccantSolar Tech';
+  p.problem = 'Food spoilage in off-grid rural communities';
+  p.country = 'Kenya';
+  p.sector = 'Clean Energy & Food Security';
+
+  const g = generateGrantConceptNote(p);
+  assert.ok(g.title);
+  assert.ok(g.agencyTopic);
+  assert.ok(g.aim1.title);
+  assert.ok(g.aim1.successCriteria);
+  assert.ok(g.aim2.title);
+  assert.ok(g.aim3.title);
+  assert.ok(g.phaseExit);
+
+  const html = generateGrantConceptNoteHtml(p);
+  assert.match(html, /<!doctype html>/i);
+  assert.match(html, /NON-DILUTIVE CAPITAL · GRANT &amp; SBIR CONCEPT NOTE/);
+  assert.match(html, /Specific Aims/);
+  assert.match(html, /Specific Aim 1/);
+  assert.match(html, /Phase I Target/);
+  assert.match(html, /Phase I Exit Criteria/);
+  assert.match(html, /Professor Babu George/);
 });

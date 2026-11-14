@@ -2,7 +2,21 @@ import {normalizePatent,selectedPatents,filterPatents,costLabel,validateSynthesi
 import {rank,tokens} from './core.js';
 import {newProject,safeURL,financials,financialInputsComplete,accessStatus,missingEvidence,context,draftPlan,exportPlan,validateProject,fingerprint,currencyForCountry,heuristicFinancials,heuristicEvidence,generateSolutionBlueprint} from './venture-core.js';
 import {discoverProviders,runAI,detectOllama,prepareBrowserAI} from './ai-client.js';
-import {buildDocx,pitchDeckSlides,generateBusinessModelCanvas,generateBusinessModelCanvasHtml} from './word-export.js';
+import {
+  buildDocx,
+  pitchDeckSlides,
+  generateBusinessModelCanvas,
+  generateBusinessModelCanvasHtml,
+  generateFinancialCsv,
+  generateOnePager,
+  generateOnePagerHtml,
+  generateInvestorQa,
+  generateInvestorQaHtml,
+  generateTtoTermSheetGuide,
+  generateTtoTermSheetGuideHtml,
+  generateGrantConceptNote,
+  generateGrantConceptNoteHtml
+} from './word-export.js';
 
 const TEMPLATES=[
  {
@@ -80,7 +94,7 @@ function save(){p.updatedAt=new Date().toISOString();try{localStorage.setItem(ST
 function modal(html){$('#modal-body').innerHTML=html;$('#modal').showModal();}
 function field(key,label,placeholder='',type='text',value=p[key]){return `<div class="field"><label for="field-${key}">${label}</label>${type==='textarea'?`<textarea id="field-${key}" data-field="${key}" rows="4" maxlength="12000" >${escape(value)}</textarea>`:`<input id="field-${key}" data-field="${key}" type="${type}" maxlength="500" value="${escape(value)}" >`}</div>`;}
 function head(number,title,copy){return `<div class="page-head"><span class="eyebrow">${number} / ${labels[number-1].toUpperCase()}</span><h2>${title}</h2><p>${copy}</p></div>`;}
-function actions(){return `<div class="section-actions">${step?'<button class="secondary" data-back>← Previous step</button>':'<span class="small muted">Start rough. You can refine everything later.</span>'}${step<5?`<button class="primary" data-next>${['Explore technologies','Shape the offer','Build the evidence','Explore the numbers','Build my plan'][step]} →</button>`:(p.sections.length?`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><button class="primary" data-export-docx>Download Word (.docx) ↓</button><button class="secondary" data-bmc>Business Model Canvas ⊞</button><button class="secondary" data-pitch-deck>10-Slide Pitch Deck ❖</button></div>`:'<button class="primary" data-ai-plan>✧ Draft Plan with AI</button>')}</div>`;}
+function actions(){return `<div class="section-actions">${step?'<button class="secondary" data-back>← Previous step</button>':'<span class="small muted">Start rough. You can refine everything later.</span>'}${step<5?`<button class="primary" data-next>${['Explore technologies','Shape the offer','Build the evidence','Explore the numbers','Build my plan'][step]} →</button>`:(p.sections.length?`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><button class="primary" data-export-docx>Word (.docx) ↓</button><button class="secondary" data-export-csv>Financials (.csv) 📊</button><button class="secondary" data-one-pager>One-Pager 📄</button><button class="secondary" data-bmc>Model Canvas ⊞</button><button class="secondary" data-pitch-deck>10-Slide Deck ❖</button></div>`:'<button class="primary" data-ai-plan>✧ Draft Plan with AI</button>')}</div>`;}
 function summary(){const completed=[!!p.problem,!!p.technology,!!p.offer,!!p.evidence.length,false,!!p.sections.length];$('#steps').innerHTML=labels.map((label,i)=>`<button class="step ${i===step?'active':''} ${completed[i]?'done':''}" data-step="${i}" ${i===step?'aria-current="step"':''}><span class="step-num">${completed[i]?'✓':i+1}</span>${label}</button>`).join('');$('#project-summary').innerHTML=`<div class="summary-row"><strong>PROJECT</strong>${escape(p.name)}</div><div class="summary-row"><strong>WHO YOU WANT TO HELP</strong>${escape(p.customer||'Still taking shape')}</div><div class="summary-row"><strong>TECHNOLOGY LEAD</strong>${escape(selectedPatents(p).map(t=>t.title).join(' + ')||'Not chosen yet')}</div><div class="summary-row"><strong>EVIDENCE</strong>${p.evidence.length} source${p.evidence.length===1?'':'s'} recorded · ${missingEvidence(p).length} gaps to explore</div><div class="summary-row"><strong>BUSINESS PLAN</strong>${p.sections.length?'Draft created · review and refine':'Not drafted yet'}</div>`;}
 function render(){summary();const c=coach[step];$('#coach-title').textContent=c[0];$('#coach-copy').textContent=c[1];$('#coach-action').textContent='✧ '+c[3];$('#coach-action').disabled=aiBusy;$('#coach-output').innerHTML=aiHTML(p.aiResults[c[2]]?.result);const views=[problemView,technologyView,offerView,evidenceView,numbersView,planView];$('#content').innerHTML=views[step]()+actions();if(step===1)renderTechnologies();if(step===4)updateNumbers();}
 function problemView(){return head(1,'What needs to change?','Describe your opportunity and where the business will operate.')+`
@@ -218,6 +232,7 @@ function technologyView(){return head(2,'Source the technology.','Choose a sourc
   <button class="primary" data-autopilot ${aiBusy?'disabled':''}>Propose a solution with AI</button>
   <button class="secondary" data-auto-multi-patent ${aiBusy?'disabled':''}>✧ Auto-select 2-3 complementary patents</button>
   <button class="secondary" data-import-tech>+ Add custom patent / design</button>
+  <button class="secondary" data-tto-guide>📜 TTO Licensing Guide</button>
  </div>
  <p class="small muted" style="margin-top:10px;">AI searches the selected integrated source, or uses your sourced documents. You review before accepting.</p>
 </div>`;}
@@ -399,7 +414,10 @@ function numbersView(){const fields=[['price','Price per unit of sale'],['unitCo
    <h3 style="margin:0 0 4px 0;">Unit economics &amp; financial assumptions</h3>
    <p style="margin:0;" class="small muted">${financialInputsComplete(p.financial)?'Assumption inputs calibrated · 12-month & 3-year models calculated below':'Complete inputs or use auto-estimate to model cash runway and break-even'}</p>
   </div>
-  <button class="secondary" data-auto-financials ${aiBusy?'disabled':''}>⚡ Auto-estimate baseline economics</button>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+   <button class="secondary" data-auto-financials ${aiBusy?'disabled':''}>⚡ Auto-estimate baseline economics</button>
+   <button class="secondary" data-export-csv>📊 Download Model (.csv)</button>
+  </div>
  </div>
  <div class="form-grid"><div class="field"><label for="currency">Currency</label><select id="currency"><option value="">Choose currency</option>${(Intl.supportedValuesOf?Intl.supportedValuesOf('currency'):['USD','EUR','GBP','INR','CAD','AUD','KES','NGN','ZAR','BRL']).map(c=>`<option ${p.financial.currency===c?'selected':''}>${c}</option>`).join('')}</select></div>${fields.map(([k,l])=>`<div class="field"><label for="number-${k}">${l}</label><input id="number-${k}" type="number" min="0" max="${k==='growth'?100:1000000000}" step="${['monthlyUnits'].includes(k)?'1':'0.01'}" data-number="${k}" value="${p.financial[k]}"></div>`).join('')}</div>
 </div>
@@ -468,13 +486,18 @@ function planView(){
 
   ${p.sections.length?`
   <div class="export-tray" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:12px 14px;background:var(--subtle);border:1px solid var(--border);border-radius:6px;margin-bottom:18px;">
-   <div style="font-size:12px;font-weight:600;color:var(--ink);text-transform:uppercase;letter-spacing:0.5px;">Export &amp; Share Plan:</div>
+   <div style="font-size:12px;font-weight:600;color:var(--ink);text-transform:uppercase;letter-spacing:0.5px;">Investor &amp; Grant Package:</div>
    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-    <button class="primary" data-export-docx>Download Word (.docx) ↓</button>
-    <button class="secondary" data-export-md>Download Markdown (.md) ↓</button>
-    <button class="secondary" data-bmc>Business Model Canvas ⊞</button>
-    <button class="secondary" data-pitch-deck>10-Slide Pitch Deck ❖</button>
-    <button class="secondary" data-print>Print / Save PDF 🖨</button>
+    <button class="primary" data-export-docx>Word (.docx) ↓</button>
+    <button class="secondary" data-export-csv>Financials (.csv) 📊</button>
+    <button class="secondary" data-one-pager>One-Pager 📄</button>
+    <button class="secondary" data-bmc>Model Canvas ⊞</button>
+    <button class="secondary" data-pitch-deck>10-Slide Deck ❖</button>
+    <button class="secondary" data-grant-note>Grant Note 📑</button>
+    <button class="secondary" data-investor-qa>Investor Q&amp;A 🎯</button>
+    <button class="secondary" data-tto-guide>TTO Terms 📜</button>
+    <button class="secondary" data-export-md>Markdown ↓</button>
+    <button class="secondary" data-print>Print 🖨</button>
    </div>
   </div>
   `:''}
@@ -483,13 +506,18 @@ function planView(){
 
   ${p.sections.length?`
   <div class="export-tray" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:12px 14px;background:var(--subtle);border:1px solid var(--border);border-radius:6px;margin-top:20px;">
-   <div style="font-size:12px;font-weight:600;color:var(--ink);text-transform:uppercase;letter-spacing:0.5px;">Export &amp; Share Plan:</div>
+   <div style="font-size:12px;font-weight:600;color:var(--ink);text-transform:uppercase;letter-spacing:0.5px;">Investor &amp; Grant Package:</div>
    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-    <button class="primary" data-export-docx>Download Word (.docx) ↓</button>
-    <button class="secondary" data-export-md>Download Markdown (.md) ↓</button>
-    <button class="secondary" data-bmc>Business Model Canvas ⊞</button>
-    <button class="secondary" data-pitch-deck>10-Slide Pitch Deck ❖</button>
-    <button class="secondary" data-print>Print / Save PDF 🖨</button>
+    <button class="primary" data-export-docx>Word (.docx) ↓</button>
+    <button class="secondary" data-export-csv>Financials (.csv) 📊</button>
+    <button class="secondary" data-one-pager>One-Pager 📄</button>
+    <button class="secondary" data-bmc>Model Canvas ⊞</button>
+    <button class="secondary" data-pitch-deck>10-Slide Deck ❖</button>
+    <button class="secondary" data-grant-note>Grant Note 📑</button>
+    <button class="secondary" data-investor-qa>Investor Q&amp;A 🎯</button>
+    <button class="secondary" data-tto-guide>TTO Terms 📜</button>
+    <button class="secondary" data-export-md>Markdown ↓</button>
+    <button class="secondary" data-print>Print 🖨</button>
    </div>
   </div>
   `:''}
@@ -658,6 +686,263 @@ function showBusinessModelCanvas(){
  const pr=$('#bmc-print-btn');
  if(pr)pr.onclick=()=>window.print();
 }
+function downloadFinancialCsv(){
+ const csv=generateFinancialCsv(p);
+ const clean=(p.name||'patent2market-venture').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+ download(`${clean||'venture'}-financial-model.csv`,csv,'text/csv;charset=utf-8');
+ notify('Financial model (.csv) downloaded for Excel / Google Sheets');
+}
+function showOnePager(){
+ const op=generateOnePager(p);
+ $('#modal').classList.add('wide-dialog');
+ modal(`
+  <div class="one-pager-modal" style="max-height:80vh;overflow-y:auto;padding-right:6px;">
+   <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:16px;border-bottom:1px solid #e2e8f0;padding-bottom:12px;">
+    <div>
+     <span class="eyebrow" style="color:var(--ink);">INVESTOR &amp; STAKEHOLDER TEASER</span>
+     <h2 style="margin:2px 0 4px 0;font-size:22px;color:#163d36;">1-Page Executive Summary · ${escape(op.name)}</h2>
+     <div class="small muted">${escape(op.tagline)} · ${escape(op.meta.sector)} · ${escape(op.meta.location)}</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+     <button class="primary" id="op-download-btn">Download Standalone (.html) ↓</button>
+     <button class="secondary" id="op-print-btn">Print / PDF 🖨</button>
+    </div>
+   </div>
+
+   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-bottom:14px;">
+    <div class="panel" style="margin:0;background:#f8fafc;border:1px solid #e2e8f0;padding:12px;">
+     <h4 style="margin:0 0 6px 0;color:#0f172a;font-size:13px;text-transform:uppercase;">The Problem &amp; Friction</h4>
+     <p style="margin:0;font-size:13px;line-height:1.5;">${escape(op.problem)}</p>
+    </div>
+    <div class="panel" style="margin:0;background:#f0fdf4;border:1px solid #bbf7d0;padding:12px;">
+     <h4 style="margin:0 0 6px 0;color:#166534;font-size:13px;text-transform:uppercase;">The Solution &amp; Proposition</h4>
+     <p style="margin:0;font-size:13px;line-height:1.5;">${escape(op.solution)}</p>
+    </div>
+   </div>
+
+   <div class="panel" style="margin:0 0 14px 0;background:#eff6ff;border:1px solid #bfdbfe;padding:12px;">
+    <h4 style="margin:0 0 6px 0;color:#1e40af;font-size:13px;text-transform:uppercase;">Technology Advantage &amp; IP Moat</h4>
+    <p style="margin:0;font-size:13px;line-height:1.5;">${escape(op.technologyMoat)}</p>
+   </div>
+
+   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:14px;">
+    <div style="padding:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;text-align:center;">
+     <div class="small muted">Unit Price</div>
+     <strong style="font-size:16px;color:#0f172a;">${escape(op.financialHighlights.unitPrice)}</strong>
+    </div>
+    <div style="padding:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;text-align:center;">
+     <div class="small muted">Unit Margin</div>
+     <strong style="font-size:16px;color:#16a34a;">${escape(op.financialHighlights.unitMargin)}</strong>
+    </div>
+    <div style="padding:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;text-align:center;">
+     <div class="small muted">Monthly Breakeven</div>
+     <strong style="font-size:16px;color:#0f172a;">${escape(op.financialHighlights.breakevenMonthlyUnits)}</strong>
+    </div>
+    <div style="padding:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;text-align:center;">
+     <div class="small muted">Capital Runway</div>
+     <strong style="font-size:16px;color:#0f172a;">${escape(op.financialHighlights.capitalRunway)}</strong>
+    </div>
+    <div style="padding:10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;text-align:center;">
+     <div class="small muted">Year 1 Net</div>
+     <strong style="font-size:16px;color:${op.financialHighlights.year1Net.startsWith('-')?'#dc2626':'#16a34a'};">${escape(op.financialHighlights.year1Net)}</strong>
+    </div>
+   </div>
+
+   <div class="panel" style="margin:0 0 14px 0;background:#fffbeb;border:1px solid #fde68a;padding:12px;">
+    <h4 style="margin:0 0 6px 0;color:#92400e;font-size:13px;text-transform:uppercase;">Key Milestones (First 90 Days)</h4>
+    <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.5;">${op.roadmap.map(r=>`<li>${escape(r)}</li>`).join('')}</ul>
+   </div>
+
+   <div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#64748b;">
+    <span>1-Page Investor / Stakeholder Teaser</span>
+    <span>Conceptualization and development: <a href="https://www.linkedin.com/in/beingbabu/" target="_blank" rel="noopener noreferrer">Professor Babu George</a></span>
+   </div>
+  </div>
+ `);
+ const dl=$('#op-download-btn');
+ if(dl)dl.onclick=()=>{
+  const clean=(p.name||'patent2market-venture').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+  download(`${clean||'venture'}-executive-summary-one-pager.html`,generateOnePagerHtml(p),'text/html');
+ };
+ const pr=$('#op-print-btn');
+ if(pr)pr.onclick=()=>window.print();
+}
+function showInvestorQa(){
+ const qa=generateInvestorQa(p);
+ $('#modal').classList.add('wide-dialog');
+ modal(`
+  <div class="investor-qa-modal" style="max-height:80vh;overflow-y:auto;padding-right:6px;">
+   <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:16px;border-bottom:1px solid #e2e8f0;padding-bottom:12px;">
+    <div>
+     <span class="eyebrow" style="color:var(--ink);">DUE DILIGENCE SIMULATOR</span>
+     <h2 style="margin:2px 0 4px 0;font-size:22px;color:#163d36;">Skeptical Investor Q&amp;A · ${escape(qa.name)}</h2>
+     <div class="small muted">Stress-test your venture model against top venture capital &amp; committee inquiries</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+     <button class="primary" id="qa-download-btn">Download Guide (.html) ↓</button>
+     <button class="secondary" id="qa-print-btn">Print / PDF 🖨</button>
+    </div>
+   </div>
+
+   <div style="display:flex;flex-direction:column;gap:14px;">
+    ${qa.questions.map((q,i)=>`
+     <div class="panel" style="margin:0;background:#ffffff;border:1px solid #e2e8f0;padding:14px;border-radius:6px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+       <span class="badge" style="background:#fee2e2;color:#991b1b;font-weight:700;">Question ${i+1} · ${escape(q.category)}</span>
+      </div>
+      <h3 style="margin:0 0 6px 0;font-size:16px;color:#0f172a;">${escape(q.question)}</h3>
+      <p style="margin:0 0 10px 0;font-size:13px;color:#64748b;font-style:italic;"><strong>Why investors ask:</strong> ${escape(q.whyTheyAsk)}</p>
+      <div style="background:#f0fdf4;border-left:4px solid #16a34a;padding:10px 12px;margin-bottom:8px;border-radius:0 4px 4px 0;">
+       <div style="font-weight:600;font-size:12px;color:#166534;text-transform:uppercase;margin-bottom:4px;">Recommended Evidence-Based Rebuttal:</div>
+       <p style="margin:0;font-size:13px;line-height:1.5;color:#14532d;">${escape(q.recommendedRebuttal)}</p>
+      </div>
+      <div style="font-size:12px;color:#475569;">
+       <strong>De-Risking Validation Experiment:</strong> ${escape(q.deRiskingExperiment)}
+      </div>
+     </div>
+    `).join('')}
+   </div>
+
+   <div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#64748b;">
+    <span>Skeptical Investor Diligence Simulator</span>
+    <span>Conceptualization and development: <a href="https://www.linkedin.com/in/beingbabu/" target="_blank" rel="noopener noreferrer">Professor Babu George</a></span>
+   </div>
+  </div>
+ `);
+ const dl=$('#qa-download-btn');
+ if(dl)dl.onclick=()=>{
+  const clean=(p.name||'patent2market-venture').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+  download(`${clean||'venture'}-investor-diligence-qa.html`,generateInvestorQaHtml(p),'text/html');
+ };
+ const pr=$('#qa-print-btn');
+ if(pr)pr.onclick=()=>window.print();
+}
+function showTtoGuide(){
+ const tto=generateTtoTermSheetGuide(p);
+ $('#modal').classList.add('wide-dialog');
+ modal(`
+  <div class="tto-guide-modal" style="max-height:80vh;overflow-y:auto;padding-right:6px;">
+   <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:16px;border-bottom:1px solid #e2e8f0;padding-bottom:12px;">
+    <div>
+     <span class="eyebrow" style="color:var(--ink);">UNIVERSITY &amp; LAB IP COMMERCIALIZATION</span>
+     <h2 style="margin:2px 0 4px 0;font-size:22px;color:#163d36;">Tech Transfer (TTO) Licensing Term Sheet Guide · ${escape(tto.name)}</h2>
+     <div class="small muted">Empowering academic &amp; independent spinouts to negotiate clean, investable patent licenses</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+     <button class="primary" id="tto-download-btn">Download Guide (.html) ↓</button>
+     <button class="secondary" id="tto-print-btn">Print / PDF 🖨</button>
+    </div>
+   </div>
+
+   <div class="panel" style="margin:0 0 14px 0;background:#eff6ff;border:1px solid #bfdbfe;padding:12px;">
+    <h4 style="margin:0 0 6px 0;color:#1e40af;font-size:13px;text-transform:uppercase;">Licensed Intellectual Property Overview</h4>
+    <p style="margin:0;font-size:13px;line-height:1.5;">${escape(tto.ipOverview)}</p>
+   </div>
+
+   <h3 style="margin:16px 0 8px 0;font-size:16px;color:#0f172a;">Standard Academic Licensing Benchmarks</h3>
+   <div class="table-wrap" style="margin-bottom:16px;">
+    <table>
+     <thead><tr><th>Term / Clause</th><th>Industry Benchmark</th><th>Spinout Recommendation</th></tr></thead>
+     <tbody>
+      ${tto.benchmarks.map(b=>`<tr><td style="font-weight:600;">${escape(b.term)}</td><td>${escape(b.benchmark)}</td><td style="color:#166534;">${escape(b.recommendation)}</td></tr>`).join('')}
+     </tbody>
+    </table>
+   </div>
+
+   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-bottom:14px;">
+    <div class="panel" style="margin:0;background:#fff1f2;border:1px solid #fecdd3;padding:12px;">
+     <h4 style="margin:0 0 8px 0;color:#9f1239;font-size:13px;text-transform:uppercase;">⚠️ Critical Licensing Pitfalls to Avoid</h4>
+     <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.5;">${tto.pitfallsToAvoid.map(pit=>`<li>${escape(pit)}</li>`).join('')}</ul>
+    </div>
+    <div class="panel" style="margin:0;background:#f0fdf4;border:1px solid #bbf7d0;padding:12px;">
+     <h4 style="margin:0 0 8px 0;color:#166534;font-size:13px;text-transform:uppercase;">✓ Spinout Term Sheet Checklist</h4>
+     <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.5;">${tto.negotiationChecklist.map(ch=>`<li>${escape(ch)}</li>`).join('')}</ul>
+    </div>
+   </div>
+
+   <div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#64748b;">
+    <span>University Tech Transfer Licensing Guide</span>
+    <span>Conceptualization and development: <a href="https://www.linkedin.com/in/beingbabu/" target="_blank" rel="noopener noreferrer">Professor Babu George</a></span>
+   </div>
+  </div>
+ `);
+ const dl=$('#tto-download-btn');
+ if(dl)dl.onclick=()=>{
+  const clean=(p.name||'patent2market-venture').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+  download(`${clean||'venture'}-tto-licensing-guide.html`,generateTtoTermSheetGuideHtml(p),'text/html');
+ };
+ const pr=$('#tto-print-btn');
+ if(pr)pr.onclick=()=>window.print();
+}
+function showGrantConceptNote(){
+ const note=generateGrantConceptNote(p);
+ $('#modal').classList.add('wide-dialog');
+ modal(`
+  <div class="grant-note-modal" style="max-height:80vh;overflow-y:auto;padding-right:6px;">
+   <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:16px;border-bottom:1px solid #e2e8f0;padding-bottom:12px;">
+    <div>
+     <span class="eyebrow" style="color:var(--ink);">NON-DILUTIVE FUNDING / SBIR / STTR / HORIZON</span>
+     <h2 style="margin:2px 0 4px 0;font-size:22px;color:#163d36;">Grant Concept Note &amp; Specific Aims · ${escape(note.name)}</h2>
+     <div class="small muted">Target: ${escape(note.targetAgencies)} · Non-dilutive capital readiness</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+     <button class="primary" id="grant-download-btn">Download Standalone (.html) ↓</button>
+     <button class="secondary" id="grant-print-btn">Print / PDF 🖨</button>
+    </div>
+   </div>
+
+   <div class="panel" style="margin:0 0 12px 0;background:#f8fafc;border:1px solid #e2e8f0;padding:12px;">
+    <h4 style="margin:0 0 4px 0;color:#0f172a;font-size:13px;text-transform:uppercase;">Project Title</h4>
+    <p style="margin:0;font-size:14px;font-weight:600;color:#163d36;">${escape(note.projectTitle)}</p>
+   </div>
+
+   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:12px;">
+    <div class="panel" style="margin:0;background:#fef2f2;border:1px solid #fecaca;padding:12px;">
+     <h4 style="margin:0 0 6px 0;color:#991b1b;font-size:13px;text-transform:uppercase;">Significance &amp; Commercial Problem</h4>
+     <p style="margin:0;font-size:13px;line-height:1.5;">${escape(note.significance)}</p>
+    </div>
+    <div class="panel" style="margin:0;background:#f0fdf4;border:1px solid #bbf7d0;padding:12px;">
+     <h4 style="margin:0 0 6px 0;color:#166534;font-size:13px;text-transform:uppercase;">Technical Innovation &amp; IP Foundation</h4>
+     <p style="margin:0;font-size:13px;line-height:1.5;">${escape(note.innovation)}</p>
+    </div>
+   </div>
+
+   <h3 style="margin:16px 0 8px 0;font-size:16px;color:#0f172a;">Specific Aims (Phase I Work Plan)</h3>
+   <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px;">
+    ${note.specificAims.map((aim,i)=>`
+     <div class="panel" style="margin:0;background:#ffffff;border:1px solid #e2e8f0;padding:12px;border-left:4px solid #0284c7;">
+      <h4 style="margin:0 0 4px 0;color:#0369a1;font-size:14px;">Aim ${i+1}: ${escape(aim.title)}</h4>
+      <p style="margin:0 0 6px 0;font-size:13px;line-height:1.5;">${escape(aim.description)}</p>
+      <div style="font-size:12px;color:#166534;"><strong>Success Milestone:</strong> ${escape(aim.milestone)}</div>
+     </div>
+    `).join('')}
+   </div>
+
+   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-bottom:14px;">
+    <div class="panel" style="margin:0;background:#faf5ff;border:1px solid #e9d5ff;padding:12px;">
+     <h4 style="margin:0 0 6px 0;color:#6b21a8;font-size:13px;text-transform:uppercase;">Commercialization Potential &amp; Societal Impact</h4>
+     <p style="margin:0;font-size:13px;line-height:1.5;">${escape(note.commercialImpact)}</p>
+    </div>
+    <div class="panel" style="margin:0;background:#eff6ff;border:1px solid #bfdbfe;padding:12px;">
+     <h4 style="margin:0 0 6px 0;color:#1e40af;font-size:13px;text-transform:uppercase;">Phase I Exit / Phase II Transition Gate</h4>
+     <p style="margin:0;font-size:13px;line-height:1.5;">${escape(note.phaseExitCriteria)}</p>
+    </div>
+   </div>
+
+   <div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#64748b;">
+    <span>SBIR / STTR / Horizon Grant Concept Note</span>
+    <span>Conceptualization and development: <a href="https://www.linkedin.com/in/beingbabu/" target="_blank" rel="noopener noreferrer">Professor Babu George</a></span>
+   </div>
+  </div>
+ `);
+ const dl=$('#grant-download-btn');
+ if(dl)dl.onclick=()=>{
+  const clean=(p.name||'patent2market-venture').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+  download(`${clean||'venture'}-grant-concept-note.html`,generateGrantConceptNoteHtml(p),'text/html');
+ };
+ const pr=$('#grant-print-btn');
+ if(pr)pr.onclick=()=>window.print();
+}
 function download(name,text,type='text/plain'){const url=URL.createObjectURL(new Blob([text],{type}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),2000);notify('Download prepared');}
 function addEvidence(){modal(`<h2>Add a useful piece of evidence</h2><p>Record what the source actually establishes. Avoid copying personal information from interviews.</p><form id="evidence-form"><div class="field"><label for="e-title">Short title</label><input id="e-title" required maxlength="500" ></div><div class="form-grid"><div class="field"><label for="e-kind">Evidence type</label><select id="e-kind"><option value="customer">Customer conversation</option><option value="competition">Competitor / alternative</option><option value="cost">Supplier quote / cost</option><option value="technical">Technical evidence</option><option value="market">Market data</option><option value="regulatory">Country / regulatory requirement</option><option value="other">Other</option></select></div><div class="field"><label for="e-date">Date</label><input type="date" id="e-date"></div></div><div class="field"><label for="e-jurisdiction">Applicable country / region</label><input id="e-jurisdiction" maxlength="200"></div><div class="field"><label for="e-url">Source URL (optional)</label><input type="url" id="e-url" ></div><div class="field"><label for="e-note">What did you learn? What does it not establish?</label><textarea id="e-note" required maxlength="10000" rows="4"></textarea></div><button class="primary" type="submit">Save evidence</button></form>`);$('#evidence-form').onsubmit=e=>{e.preventDefault();if(p.evidence.length>=40){notify('Export your project before adding more than 40 evidence records.');return;}const url=$('#e-url').value;if(url&&!safeURL(url)){notify('Use an HTTP or HTTPS source URL.');return;}p.evidence.push({title:$('#e-title').value,kind:$('#e-kind').value,date:$('#e-date').value,jurisdiction:$('#e-jurisdiction').value,url:safeURL(url),note:$('#e-note').value});save();$('#modal').close();render();};}
 function accessModal(index=0){const t=selectedPatents(p)[index];modal(`<h2>Record the basis for using this technology</h2><p>Public patent text is not permission to use the invention. Record evidence for the applicable jurisdiction and date. This record is your assessment, not independent verification.</p><form id="access-form"><div class="field"><label for="access-kind">Access basis</label><select id="access-kind"><option value="unknown">Not established / may need a license</option><option value="open-license">An applicable open license</option><option value="expired">Relevant patent rights appear expired</option></select></div><div class="field"><label for="access-url">Authoritative source URL</label><input type="url" id="access-url" value="${escape(t.accessURL||'')}"></div><div class="form-grid"><div class="field"><label for="jurisdiction">Country / jurisdiction</label><input id="jurisdiction" value="${escape(t.jurisdiction||'')}"></div><div class="field"><label for="checked-at">Date checked</label><input id="checked-at" type="date" value="${escape(t.checkedAt||'')}"></div></div><div class="field"><label for="access-evidence">Evidence, applicable conditions, and remaining uncertainty</label><textarea id="access-evidence" rows="4" maxlength="12000">${escape(t.accessEvidence||'')}</textarea></div><div class="field"><label for="full-text-url">Full document URL (description and claims)</label><input id="full-text-url" type="url" value="${escape(t.fullTextURL||'')}"></div><div class="field"><label for="full-text-evidence">What complete text did you review? Leave blank if unconfirmed.</label><textarea id="full-text-evidence">${escape(t.fullTextEvidence||'')}</textarea></div><div class="field"><label for="claims-excerpt">Relevant claims / technical excerpts for AI (optional; up to 6,000 characters)</label><textarea id="claims-excerpt" maxlength="6000">${escape(t.claimsExcerpt||'')}</textarea></div><div class="field"><label for="cost-terms">Published usage price and terms (currency, upfront fees, royalties, eligibility)</label><textarea id="cost-terms">${escape(t.costTerms||'')}</textarea></div><div class="field"><label for="cost-url">Published price source URL</label><input id="cost-url" type="url" value="${escape(t.costURL||'')}"></div><div class="field"><label for="cost-date">Price checked on</label><input id="cost-date" type="date" value="${escape(t.costCheckedAt||'')}"></div><p class="small">Unknown price is not zero. Enter applicable fees into launch or operating costs after confirming terms.</p><button class="primary">Save access assessment</button></form>`);$('#access-kind').value=t.access||'unknown';$('#access-form').onsubmit=e=>{e.preventDefault();const access=$('#access-kind').value,url=safeURL($('#access-url').value),note=$('#access-evidence').value,region=$('#jurisdiction').value,date=$('#checked-at').value;if(access!=='unknown'&&(!url||!note.trim()||!region.trim()||!date)){notify('Add the source, jurisdiction, date, and reasoning for this access basis.');return;}const costTerms=$('#cost-terms').value,costURL=safeURL($('#cost-url').value),costCheckedAt=$('#cost-date').value;if(costTerms&&(!costURL||!costCheckedAt)){notify('Published prices need a source URL and checked date.');return;}const fullTextURL=safeURL($('#full-text-url').value),fullTextEvidence=$('#full-text-evidence').value;Object.assign(t,{access,accessURL:url,accessEvidence:note,jurisdiction:region,checkedAt:date,basisOrigin:'user-recorded',statusLabel:access,fullTextURL,fullTextEvidence,fullTextAvailable:!!fullTextURL&&!!fullTextEvidence.trim(),claimsExcerpt:$('#claims-excerpt').value,costTerms,costURL,costCheckedAt});save();$('#modal').close();render();};}
@@ -758,6 +1043,11 @@ if('autoComplementarySearch'in d){
  return;
 }
 if('exportDocx'in d){downloadDocx();return;}
+if('exportCsv'in d){downloadFinancialCsv();return;}
+if('onePager'in d){showOnePager();return;}
+if('grantNote'in d){showGrantConceptNote();return;}
+if('investorQa'in d){showInvestorQa();return;}
+if('ttoGuide'in d){showTtoGuide();return;}
 if('exportMd'in d){download((p.name?p.name.toLowerCase().replace(/[^a-z0-9]+/g,'-'):'patent2market-plan')+'.md',exportPlan(p),'text/markdown');return;}
 if('bmc'in d){showBusinessModelCanvas();return;}
 if('pitchDeck'in d){showPitchDeck();return;}
