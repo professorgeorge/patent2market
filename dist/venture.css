@@ -566,6 +566,9 @@ dialog {
   box-shadow: 0 25px 80px rgba(22, 61, 54, 0.28);
   background: #ffffff;
 }
+dialog.wide-dialog {
+  width: min(1180px, 96vw);
+}
 dialog::backdrop {
   background: rgba(15, 38, 33, 0.6);
   backdrop-filter: blur(5px);
@@ -809,6 +812,94 @@ dialog code { font-size: 11px; word-break: break-all; background: #f1f5f9; paddi
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .slide-dot.active { background: #163d36; transform: scale(1.3); }
+
+/* Business Model Canvas */
+.bmc-modal-container { padding: 4px; }
+.bmc-grid {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  grid-auto-rows: minmax(140px, auto);
+  gap: 10px;
+}
+.bmc-card {
+  background: #ffffff;
+  border: 1.5px solid #d2ddcb;
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
+}
+.bmc-card.highlight {
+  background: #fafdf9;
+  border-color: #a3cfbb;
+}
+.bmc-partners { grid-column: span 2; grid-row: span 2; }
+.bmc-activities { grid-column: span 2; grid-row: span 1; }
+.bmc-resources { grid-column: span 2; grid-row: span 1; }
+.bmc-propositions { grid-column: span 2; grid-row: span 2; }
+.bmc-relationships { grid-column: span 2; grid-row: span 1; }
+.bmc-channels { grid-column: span 2; grid-row: span 1; }
+.bmc-segments { grid-column: span 2; grid-row: span 2; }
+.bmc-costs { grid-column: span 5; grid-row: span 1; }
+.bmc-revenues { grid-column: span 5; grid-row: span 1; }
+
+.bmc-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #edf2e9;
+  padding-bottom: 6px;
+}
+.bmc-icon { font-size: 16px; line-height: 1; }
+.bmc-head h4 {
+  font-size: 12px;
+  color: #163d36;
+  margin: 0;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.bmc-head small {
+  font-size: 10px;
+  color: #64748b;
+  display: block;
+  line-height: 1.25;
+}
+.bmc-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-grow: 1;
+}
+.bmc-list li {
+  font-size: 11px;
+  color: #1f2937;
+  line-height: 1.35;
+  position: relative;
+  padding-left: 13px;
+}
+.bmc-list li::before {
+  content: "▪";
+  position: absolute;
+  left: 0;
+  color: #2e7d32;
+  font-size: 10px;
+}
+
+@media (max-width: 900px) {
+  .bmc-grid { grid-template-columns: 1fr; }
+  .bmc-partners, .bmc-activities, .bmc-resources,
+  .bmc-propositions, .bmc-relationships, .bmc-channels,
+  .bmc-segments, .bmc-costs, .bmc-revenues {
+    grid-column: span 1 !important;
+    grid-row: auto !important;
+  }
+}
 
 /* Responsive Media Queries */
 @media (max-width: 1000px) {

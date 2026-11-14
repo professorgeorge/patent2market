@@ -449,3 +449,506 @@ export function pitchDeckSlides(project) {
     }
   ];
 }
+
+export function generateBusinessModelCanvas(project) {
+  const p = project || {};
+  const f = financials(p.financial || {});
+  const curr = p.financial?.currency || 'USD';
+  const money = n => `${curr} ${Math.round(n || 0).toLocaleString('en-US')}`;
+  const patents = selectedPatents(p);
+  const bp = generateSolutionBlueprint(p);
+
+  return {
+    name: p.name || 'Patent2Market Venture',
+    problem: p.problem || 'Market opportunity',
+    country: p.country || 'Target Market',
+    date: new Date().toISOString().slice(0, 10),
+    blocks: {
+      keyPartners: {
+        id: 'keyPartners',
+        title: 'Key Partners',
+        subtitle: 'Who helps us build, supply & deliver?',
+        items: [
+          patents.length
+            ? `Patent Licensors / Assignees for: ${patents.map(t => t.id).join(', ')}`
+            : 'Intellectual property licensors and university tech transfer offices',
+          bp.gaps?.length
+            ? `COTS Component Suppliers for: ${bp.gaps.slice(0, 2).map(g => g.subsystem).join(', ')}`
+            : 'COTS industrial component suppliers and fabrication partners',
+          p.channel
+            ? `Distribution & GTM Partners: ${p.channel.slice(0, 80)}`
+            : 'Regional distributors and industry trade associations',
+          `Local regulatory, certification & standards bodies in ${p.country || 'operating territory'}`
+        ]
+      },
+      keyActivities: {
+        id: 'keyActivities',
+        title: 'Key Activities',
+        subtitle: 'What core things must the venture do?',
+        items: [
+          'System integration of patented mechanisms with COTS auxiliary hardware',
+          'Rigorous bench testing, QA, and local environmental stress validation',
+          `Direct customer acquisition & pilot onboarding in ${p.geography || p.country || 'launch territory'}`,
+          'Continuous field telemetry monitoring, maintenance & consumables support'
+        ]
+      },
+      keyResources: {
+        id: 'keyResources',
+        title: 'Key Resources',
+        subtitle: 'What assets are indispensable?',
+        items: [
+          patents.length
+            ? `Patented Technology Stack: ${patents.map(t => `[${t.id}] ${t.title}`).join('; ')}`
+            : 'Proprietary engineering know-how & modular solution architecture',
+          p.advantage
+            ? `Founder Capabilities: ${p.advantage}`
+            : 'Technical integration and local operational execution capabilities',
+          `Field Evidence Base (${(p.evidence || []).length} recorded proof points & test targets)`,
+          p.financial?.capital ? `Initial Launch Capital: ${money(p.financial.capital)}` : 'Dedicated venture seed capital & working credit facilities'
+        ]
+      },
+      valuePropositions: {
+        id: 'valuePropositions',
+        title: 'Value Propositions',
+        subtitle: 'What compelling value is delivered?',
+        items: [
+          p.offer ? `Commercial Offering: ${p.offer}` : 'Integrated, reliable commercial product/service solution',
+          p.concept ? `Technical Advantage: ${p.concept.slice(0, 160)}` : 'Solves core performance bottlenecks via proven mechanical principles',
+          `Addresses critical market friction: "${(p.problem || 'High operational costs').slice(0, 140)}"`,
+          p.localContext ? `Engineered specifically for: ${p.localContext.slice(0, 120)}` : 'Ruggedized for local operating constraints with minimal maintenance overhead'
+        ]
+      },
+      customerRelationships: {
+        id: 'customerRelationships',
+        title: 'Customer Relationships',
+        subtitle: 'How do we interact with customers?',
+        items: [
+          'High-touch onboarding, technical operator training & commissioning',
+          'Preventative maintenance service level agreements (SLAs)',
+          'Direct customer feedback loops and agile performance optimization',
+          'Transparent, predictable pricing with no hidden service surcharges'
+        ]
+      },
+      channels: {
+        id: 'channels',
+        title: 'Channels',
+        subtitle: 'How do we reach and distribute to customers?',
+        items: [
+          p.channel ? `Primary Route: ${p.channel}` : 'Direct B2B founder sales & key account management',
+          `Sector distributor networks & agricultural/commercial hubs in ${p.geography || p.country || 'local market'}`,
+          'On-site field demonstrations & peer-to-peer customer referral showcases',
+          'Digital direct inquiry portal and regional trade expos'
+        ]
+      },
+      customerSegments: {
+        id: 'customerSegments',
+        title: 'Customer Segments',
+        subtitle: 'Who are our most important customers?',
+        items: [
+          p.customer ? `Target Profile: ${p.customer}` : 'Commercial operators seeking verified performance efficiency',
+          `Geographic Scope: ${p.geography ? `${p.geography}, ` : ''}${p.country || 'Target Region'}`,
+          p.sector ? `Target Sector: ${p.sector}` : 'Commercial & industrial small/mid-size enterprises',
+          'Early Adopter Persona: Cost-conscious operators bearing high losses from existing alternatives'
+        ]
+      },
+      costStructure: {
+        id: 'costStructure',
+        title: 'Cost Structure',
+        subtitle: 'What are the major costs & drivers?',
+        items: [
+          p.financial?.unitCost ? `Variable Unit COGS: ${money(p.financial.unitCost)} per unit (BOM materials, sub-assembly, packaging)` : 'Variable manufacturing & component procurement costs',
+          p.financial?.fixedCost ? `Monthly Fixed Operating Burn: ${money(p.financial.fixedCost)}/mo (personnel, facility, insurance)` : 'Monthly fixed operational overhead',
+          p.financial?.startupCost ? `Upfront Launch & Tooling Capex: ${money(p.financial.startupCost)}` : 'Initial engineering tooling & certification capital',
+          'IP rights maintenance, licensing royalties & territorial compliance fees'
+        ]
+      },
+      revenueStreams: {
+        id: 'revenueStreams',
+        title: 'Revenue Streams',
+        subtitle: 'How does the business generate cash?',
+        items: [
+          p.financial?.price ? `Unit Selling Price: ${money(p.financial.price)} per unit of sale` : 'Direct commercial unit sales or service fees',
+          p.financial?.monthlyUnits ? `Month 1 Target Volume: ${p.financial.monthlyUnits} units (${p.financial.growth || 0}% monthly growth)` : 'Volume-based sales trajectory',
+          f.margin !== null ? `Gross Contribution Margin: ~${Math.round(f.margin * 100)}% per sale` : 'Healthy unit contribution margin',
+          'Ancillary recurring revenues: maintenance contracts, consumable kits, software telemetry'
+        ]
+      }
+    }
+  };
+}
+
+export function generateBusinessModelCanvasHtml(project) {
+  const bmc = generateBusinessModelCanvas(project);
+  const b = bmc.blocks;
+  const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>${esc(bmc.name)} — Business Model Canvas</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      --primary: #163d36;
+      --primary-light: #21594f;
+      --accent: #2e7d32;
+      --bg: #f8faf7;
+      --card-bg: #ffffff;
+      --border: #d2ddcb;
+      --ink: #0f2c27;
+      --muted: #475569;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      padding: 24px;
+      line-height: 1.45;
+    }
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 16px;
+      border-bottom: 2px solid var(--primary);
+      padding-bottom: 16px;
+      margin-bottom: 20px;
+    }
+    .header h1 {
+      font-size: 26px;
+      color: var(--primary);
+      margin: 2px 0 6px 0;
+      letter-spacing: -0.5px;
+    }
+    .header .meta {
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .header .meta strong {
+      color: var(--ink);
+    }
+    .eyebrow {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .print-btn {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .print-btn:hover {
+      background: var(--primary-light);
+    }
+    .bmc-grid {
+      display: grid;
+      grid-template-columns: repeat(10, 1fr);
+      grid-auto-rows: minmax(170px, auto);
+      gap: 12px;
+    }
+    .bmc-card {
+      background: #ffffff;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+    .bmc-card.highlight {
+      background: #fafdf9;
+      border-color: #a3cfbb;
+    }
+    .bmc-partners { grid-column: span 2; grid-row: span 2; }
+    .bmc-activities { grid-column: span 2; grid-row: span 1; }
+    .bmc-resources { grid-column: span 2; grid-row: span 1; }
+    .bmc-propositions { grid-column: span 2; grid-row: span 2; }
+    .bmc-relationships { grid-column: span 2; grid-row: span 1; }
+    .bmc-channels { grid-column: span 2; grid-row: span 1; }
+    .bmc-segments { grid-column: span 2; grid-row: span 2; }
+    .bmc-costs { grid-column: span 5; grid-row: span 1; }
+    .bmc-revenues { grid-column: span 5; grid-row: span 1; }
+    .bmc-head {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin-bottom: 10px;
+      border-bottom: 1px solid #edf2e9;
+      padding-bottom: 6px;
+    }
+    .bmc-icon {
+      font-size: 18px;
+      line-height: 1;
+    }
+    .bmc-head h4 {
+      font-size: 13.5px;
+      color: var(--primary);
+      margin: 0;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .bmc-head small {
+      font-size: 11px;
+      color: var(--muted);
+      display: block;
+    }
+    .bmc-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex-grow: 1;
+    }
+    .bmc-list li {
+      font-size: 12px;
+      color: #2c3e50;
+      line-height: 1.45;
+      position: relative;
+      padding-left: 14px;
+    }
+    .bmc-list li::before {
+      content: "▪";
+      position: absolute;
+      left: 0;
+      color: var(--accent);
+      font-size: 11px;
+    }
+    .footer {
+      margin-top: 24px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .footer a {
+      color: var(--primary);
+      text-decoration: underline;
+    }
+    @media (max-width: 960px) {
+      .bmc-grid {
+        grid-template-columns: 1fr;
+      }
+      .bmc-partners, .bmc-activities, .bmc-resources,
+      .bmc-propositions, .bmc-relationships, .bmc-channels,
+      .bmc-segments, .bmc-costs, .bmc-revenues {
+        grid-column: span 1 !important;
+        grid-row: auto !important;
+      }
+    }
+    @media print {
+      @page {
+        size: landscape;
+        margin: 6mm;
+      }
+      body {
+        background: white !important;
+        padding: 0 !important;
+      }
+      .container {
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+        max-width: 100% !important;
+      }
+      .print-btn {
+        display: none !important;
+      }
+      .bmc-grid {
+        display: grid !important;
+        grid-template-columns: repeat(10, 1fr) !important;
+        grid-auto-rows: minmax(135px, auto) !important;
+        gap: 6px !important;
+      }
+      .bmc-card {
+        padding: 8px 10px !important;
+        border: 1px solid #163d36 !important;
+        box-shadow: none !important;
+      }
+      .bmc-list li {
+        font-size: 10px !important;
+        line-height: 1.3 !important;
+        margin-bottom: 2px !important;
+      }
+      .bmc-head h4 {
+        font-size: 11.5px !important;
+      }
+      .bmc-head small {
+        font-size: 9px !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div>
+        <span class="eyebrow">PATENT2MARKET · VENTURE MODELING</span>
+        <h1>${esc(bmc.name)} — Business Model Canvas</h1>
+        <div class="meta">
+          <strong>Operating Territory:</strong> ${esc(bmc.country)} &nbsp;|&nbsp; 
+          <strong>Date Generated:</strong> ${esc(bmc.date)} &nbsp;|&nbsp; 
+          <strong>Framework:</strong> Alexander Osterwalder Standard
+        </div>
+      </div>
+      <div>
+        <button class="print-btn" onclick="window.print()">Print / Save as PDF 🖨</button>
+      </div>
+    </div>
+
+    <div class="bmc-grid">
+      <div class="bmc-card bmc-partners">
+        <div class="bmc-head">
+          <span class="bmc-icon">🤝</span>
+          <div>
+            <h4>${esc(b.keyPartners.title)}</h4>
+            <small>${esc(b.keyPartners.subtitle)}</small>
+          </div>
+        </div>
+        <ul class="bmc-list">
+          ${b.keyPartners.items.map(it => `<li>${esc(it)}</li>`).join('')}
+        </ul>
+      </div>
+
+      <div class="bmc-card bmc-activities">
+        <div class="bmc-head">
+          <span class="bmc-icon">⚡</span>
+          <div>
+            <h4>${esc(b.keyActivities.title)}</h4>
+            <small>${esc(b.keyActivities.subtitle)}</small>
+          </div>
+        </div>
+        <ul class="bmc-list">
+          ${b.keyActivities.items.map(it => `<li>${esc(it)}</li>`).join('')}
+        </ul>
+      </div>
+
+      <div class="bmc-card bmc-resources">
+        <div class="bmc-head">
+          <span class="bmc-icon">🏗</span>
+          <div>
+            <h4>${esc(b.keyResources.title)}</h4>
+            <small>${esc(b.keyResources.subtitle)}</small>
+          </div>
+        </div>
+        <ul class="bmc-list">
+          ${b.keyResources.items.map(it => `<li>${esc(it)}</li>`).join('')}
+        </ul>
+      </div>
+
+      <div class="bmc-card bmc-propositions highlight">
+        <div class="bmc-head">
+          <span class="bmc-icon">🎁</span>
+          <div>
+            <h4>${esc(b.valuePropositions.title)}</h4>
+            <small>${esc(b.valuePropositions.subtitle)}</small>
+          </div>
+        </div>
+        <ul class="bmc-list">
+          ${b.valuePropositions.items.map(it => `<li>${esc(it)}</li>`).join('')}
+        </ul>
+      </div>
+
+      <div class="bmc-card bmc-relationships">
+        <div class="bmc-head">
+          <span class="bmc-icon">💬</span>
+          <div>
+            <h4>${esc(b.customerRelationships.title)}</h4>
+            <small>${esc(b.customerRelationships.subtitle)}</small>
+          </div>
+        </div>
+        <ul class="bmc-list">
+          ${b.customerRelationships.items.map(it => `<li>${esc(it)}</li>`).join('')}
+        </ul>
+      </div>
+
+      <div class="bmc-card bmc-channels">
+        <div class="bmc-head">
+          <span class="bmc-icon">🚚</span>
+          <div>
+            <h4>${esc(b.channels.title)}</h4>
+            <small>${esc(b.channels.subtitle)}</small>
+          </div>
+        </div>
+        <ul class="bmc-list">
+          ${b.channels.items.map(it => `<li>${esc(it)}</li>`).join('')}
+        </ul>
+      </div>
+
+      <div class="bmc-card bmc-segments">
+        <div class="bmc-head">
+          <span class="bmc-icon">👥</span>
+          <div>
+            <h4>${esc(b.customerSegments.title)}</h4>
+            <small>${esc(b.customerSegments.subtitle)}</small>
+          </div>
+        </div>
+        <ul class="bmc-list">
+          ${b.customerSegments.items.map(it => `<li>${esc(it)}</li>`).join('')}
+        </ul>
+      </div>
+
+      <div class="bmc-card bmc-costs">
+        <div class="bmc-head">
+          <span class="bmc-icon">🏷</span>
+          <div>
+            <h4>${esc(b.costStructure.title)}</h4>
+            <small>${esc(b.costStructure.subtitle)}</small>
+          </div>
+        </div>
+        <ul class="bmc-list">
+          ${b.costStructure.items.map(it => `<li>${esc(it)}</li>`).join('')}
+        </ul>
+      </div>
+
+      <div class="bmc-card bmc-revenues highlight">
+        <div class="bmc-head">
+          <span class="bmc-icon">💰</span>
+          <div>
+            <h4>${esc(b.revenueStreams.title)}</h4>
+            <small>${esc(b.revenueStreams.subtitle)}</small>
+          </div>
+        </div>
+        <ul class="bmc-list">
+          ${b.revenueStreams.items.map(it => `<li>${esc(it)}</li>`).join('')}
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer">
+      <span>Grounded in verified patents, documented market evidence &amp; calibrated unit economics.</span>
+      <span>Conceptualization and development: <a href="https://www.linkedin.com/in/beingbabu/" target="_blank" rel="noopener noreferrer">Professor Babu George</a></span>
+    </div>
+  </div>
+</body>
+</html>`;
+}

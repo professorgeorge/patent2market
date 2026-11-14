@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createZip, buildDocx, generateWordHtml, pitchDeckSlides } from '../dist/word-export.js';
+import { createZip, buildDocx, generateWordHtml, pitchDeckSlides, generateBusinessModelCanvas, generateBusinessModelCanvasHtml } from '../dist/word-export.js';
 import { classifySubsystem } from '../dist/patents.js';
 import { newProject, draftPlan, heuristicFinancials, heuristicEvidence } from '../dist/venture-core.js';
 import { googleRecord } from '../server/patents.mjs';
@@ -107,4 +107,72 @@ test('pitchDeckSlides produces 10 structured slides for investor presentation', 
   assert.match(slides[3].title, /Technology/);
   assert.match(slides[4].title, /Business Model/);
   assert.match(slides[8].title, /Roadmap/);
+});
+
+test('generateBusinessModelCanvas produces all 9 Osterwalder building blocks', () => {
+  const p = newProject();
+  p.name = 'AquaPure Solar';
+  p.problem = 'Arsenic and fluoride contamination in drinking water';
+  p.customer = 'Rural village panchayats and water cooperatives';
+  p.country = 'India';
+  p.financial = heuristicFinancials(p);
+  p.evidence = heuristicEvidence(p);
+  p.channel = 'Regional rural water development agencies';
+  p.advantage = '15 years field hydrogeology and community water engineering';
+  p.technologies = [
+    googleRecord({
+      publication_number: 'US9876543B2',
+      title: 'Solar Distillation Apparatus with Integrated Membrane',
+      snippet: 'Water purification system using solar collector and membrane filter',
+      family_metadata: { aggregated: { country_status: [{ country_code: 'US', best_patent_stage: { state: 'ACTIVE' } }] } }
+    })
+  ];
+
+  const bmc = generateBusinessModelCanvas(p);
+  assert.equal(bmc.name, 'AquaPure Solar');
+  assert.equal(bmc.country, 'India');
+  assert.ok(bmc.blocks);
+
+  const blockKeys = [
+    'keyPartners', 'keyActivities', 'keyResources',
+    'valuePropositions', 'customerRelationships', 'channels',
+    'customerSegments', 'costStructure', 'revenueStreams'
+  ];
+  for (const k of blockKeys) {
+    assert.ok(bmc.blocks[k], `Missing BMC block: ${k}`);
+    assert.ok(bmc.blocks[k].title, `Missing title in BMC block: ${k}`);
+    assert.ok(Array.isArray(bmc.blocks[k].items), `Items not an array in BMC block: ${k}`);
+    assert.ok(bmc.blocks[k].items.length >= 3, `Expected at least 3 items in BMC block: ${k}`);
+  }
+
+  // Key Resources should include patent
+  const kr = bmc.blocks.keyResources.items.join(' ');
+  assert.match(kr, /US9876543B2/);
+  assert.match(kr, /AquaPure Solar|hydrogeology/);
+
+  // Cost Structure and Revenue Streams should include financial figures
+  const costs = bmc.blocks.costStructure.items.join(' ');
+  const revs = bmc.blocks.revenueStreams.items.join(' ');
+  assert.match(costs, /COGS|Unit/);
+  assert.match(revs, /Price|Selling/);
+});
+
+test('generateBusinessModelCanvasHtml produces valid standalone HTML with embedded print styles', () => {
+  const p = newProject();
+  p.name = 'FreshCold Logistics';
+  p.country = 'Kenya';
+  p.financial = heuristicFinancials(p);
+
+  const html = generateBusinessModelCanvasHtml(p);
+  assert.match(html, /<!doctype html>/i);
+  assert.match(html, /FreshCold Logistics — Business Model Canvas/);
+  assert.match(html, /Alexander Osterwalder/);
+  assert.match(html, /Key Partners/);
+  assert.match(html, /Value Propositions/);
+  assert.match(html, /Customer Segments/);
+  assert.match(html, /Cost Structure/);
+  assert.match(html, /Revenue Streams/);
+  assert.match(html, /@media print/);
+  assert.match(html, /Professor Babu George/);
+  assert.match(html, /https:\/\/www\.linkedin\.com\/in\/beingbabu\//);
 });

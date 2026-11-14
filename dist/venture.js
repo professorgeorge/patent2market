@@ -2,7 +2,7 @@ import {normalizePatent,selectedPatents,filterPatents,costLabel,validateSynthesi
 import {rank,tokens} from './core.js';
 import {newProject,safeURL,financials,financialInputsComplete,accessStatus,missingEvidence,context,draftPlan,exportPlan,validateProject,fingerprint,currencyForCountry,heuristicFinancials,heuristicEvidence,generateSolutionBlueprint} from './venture-core.js';
 import {discoverProviders,runAI,detectOllama,prepareBrowserAI} from './ai-client.js';
-import {buildDocx,pitchDeckSlides} from './word-export.js';
+import {buildDocx,pitchDeckSlides,generateBusinessModelCanvas,generateBusinessModelCanvasHtml} from './word-export.js';
 
 const TEMPLATES=[
  {
@@ -80,7 +80,7 @@ function save(){p.updatedAt=new Date().toISOString();try{localStorage.setItem(ST
 function modal(html){$('#modal-body').innerHTML=html;$('#modal').showModal();}
 function field(key,label,placeholder='',type='text',value=p[key]){return `<div class="field"><label for="field-${key}">${label}</label>${type==='textarea'?`<textarea id="field-${key}" data-field="${key}" rows="4" maxlength="12000" >${escape(value)}</textarea>`:`<input id="field-${key}" data-field="${key}" type="${type}" maxlength="500" value="${escape(value)}" >`}</div>`;}
 function head(number,title,copy){return `<div class="page-head"><span class="eyebrow">${number} / ${labels[number-1].toUpperCase()}</span><h2>${title}</h2><p>${copy}</p></div>`;}
-function actions(){return `<div class="section-actions">${step?'<button class="secondary" data-back>← Previous step</button>':'<span class="small muted">Start rough. You can refine everything later.</span>'}${step<5?`<button class="primary" data-next>${['Explore technologies','Shape the offer','Build the evidence','Explore the numbers','Build my plan'][step]} →</button>`:(p.sections.length?`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><button class="primary" data-export-docx>Download Word (.docx) ↓</button><button class="secondary" data-pitch-deck>10-Slide Pitch Deck ❖</button></div>`:'<button class="primary" data-ai-plan>✧ Draft Plan with AI</button>')}</div>`;}
+function actions(){return `<div class="section-actions">${step?'<button class="secondary" data-back>← Previous step</button>':'<span class="small muted">Start rough. You can refine everything later.</span>'}${step<5?`<button class="primary" data-next>${['Explore technologies','Shape the offer','Build the evidence','Explore the numbers','Build my plan'][step]} →</button>`:(p.sections.length?`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><button class="primary" data-export-docx>Download Word (.docx) ↓</button><button class="secondary" data-bmc>Business Model Canvas ⊞</button><button class="secondary" data-pitch-deck>10-Slide Pitch Deck ❖</button></div>`:'<button class="primary" data-ai-plan>✧ Draft Plan with AI</button>')}</div>`;}
 function summary(){const completed=[!!p.problem,!!p.technology,!!p.offer,!!p.evidence.length,false,!!p.sections.length];$('#steps').innerHTML=labels.map((label,i)=>`<button class="step ${i===step?'active':''} ${completed[i]?'done':''}" data-step="${i}" ${i===step?'aria-current="step"':''}><span class="step-num">${completed[i]?'✓':i+1}</span>${label}</button>`).join('');$('#project-summary').innerHTML=`<div class="summary-row"><strong>PROJECT</strong>${escape(p.name)}</div><div class="summary-row"><strong>WHO YOU WANT TO HELP</strong>${escape(p.customer||'Still taking shape')}</div><div class="summary-row"><strong>TECHNOLOGY LEAD</strong>${escape(selectedPatents(p).map(t=>t.title).join(' + ')||'Not chosen yet')}</div><div class="summary-row"><strong>EVIDENCE</strong>${p.evidence.length} source${p.evidence.length===1?'':'s'} recorded · ${missingEvidence(p).length} gaps to explore</div><div class="summary-row"><strong>BUSINESS PLAN</strong>${p.sections.length?'Draft created · review and refine':'Not drafted yet'}</div>`;}
 function render(){summary();const c=coach[step];$('#coach-title').textContent=c[0];$('#coach-copy').textContent=c[1];$('#coach-action').textContent='✧ '+c[3];$('#coach-action').disabled=aiBusy;$('#coach-output').innerHTML=aiHTML(p.aiResults[c[2]]?.result);const views=[problemView,technologyView,offerView,evidenceView,numbersView,planView];$('#content').innerHTML=views[step]()+actions();if(step===1)renderTechnologies();if(step===4)updateNumbers();}
 function problemView(){return head(1,'What needs to change?','Describe your opportunity and where the business will operate.')+`
@@ -472,6 +472,7 @@ function planView(){
    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
     <button class="primary" data-export-docx>Download Word (.docx) ↓</button>
     <button class="secondary" data-export-md>Download Markdown (.md) ↓</button>
+    <button class="secondary" data-bmc>Business Model Canvas ⊞</button>
     <button class="secondary" data-pitch-deck>10-Slide Pitch Deck ❖</button>
     <button class="secondary" data-print>Print / Save PDF 🖨</button>
    </div>
@@ -486,6 +487,7 @@ function planView(){
    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
     <button class="primary" data-export-docx>Download Word (.docx) ↓</button>
     <button class="secondary" data-export-md>Download Markdown (.md) ↓</button>
+    <button class="secondary" data-bmc>Business Model Canvas ⊞</button>
     <button class="secondary" data-pitch-deck>10-Slide Pitch Deck ❖</button>
     <button class="secondary" data-print>Print / Save PDF 🖨</button>
    </div>
@@ -585,6 +587,76 @@ function showPitchDeck(initialSlide=0){
   });
  }
  bindDeck();
+}
+function showBusinessModelCanvas(){
+ const bmc=generateBusinessModelCanvas(p);
+ const b=bmc.blocks;
+ $('#modal').classList.add('wide-dialog');
+ modal(`
+  <div class="bmc-modal-container">
+   <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:14px;border-bottom:1px solid #e2e8f0;padding-bottom:12px;">
+    <div>
+     <span class="eyebrow" style="color:var(--ink);">STRATEGIC VENTURE ARCHITECTURE</span>
+     <h2 style="margin:2px 0 4px 0;font-size:22px;color:#163d36;">Business Model Canvas · ${escape(bmc.name)}</h2>
+     <div class="small muted">Alexander Osterwalder 9-box framework · Grounded in verified patents, local evidence &amp; unit economics</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+     <button class="primary" id="bmc-download-btn">Download Standalone Canvas (.html) ↓</button>
+     <button class="secondary" id="bmc-print-btn">Print / Save PDF 🖨</button>
+    </div>
+   </div>
+
+   <div class="bmc-grid">
+    <div class="bmc-card bmc-partners">
+     <div class="bmc-head"><span class="bmc-icon">🤝</span><div><h4>${escape(b.keyPartners.title)}</h4><small>${escape(b.keyPartners.subtitle)}</small></div></div>
+     <ul class="bmc-list">${b.keyPartners.items.map(it=>`<li>${escape(it)}</li>`).join('')}</ul>
+    </div>
+    <div class="bmc-card bmc-activities">
+     <div class="bmc-head"><span class="bmc-icon">⚡</span><div><h4>${escape(b.keyActivities.title)}</h4><small>${escape(b.keyActivities.subtitle)}</small></div></div>
+     <ul class="bmc-list">${b.keyActivities.items.map(it=>`<li>${escape(it)}</li>`).join('')}</ul>
+    </div>
+    <div class="bmc-card bmc-resources">
+     <div class="bmc-head"><span class="bmc-icon">🏗</span><div><h4>${escape(b.keyResources.title)}</h4><small>${escape(b.keyResources.subtitle)}</small></div></div>
+     <ul class="bmc-list">${b.keyResources.items.map(it=>`<li>${escape(it)}</li>`).join('')}</ul>
+    </div>
+    <div class="bmc-card bmc-propositions highlight">
+     <div class="bmc-head"><span class="bmc-icon">🎁</span><div><h4>${escape(b.valuePropositions.title)}</h4><small>${escape(b.valuePropositions.subtitle)}</small></div></div>
+     <ul class="bmc-list">${b.valuePropositions.items.map(it=>`<li>${escape(it)}</li>`).join('')}</ul>
+    </div>
+    <div class="bmc-card bmc-relationships">
+     <div class="bmc-head"><span class="bmc-icon">💬</span><div><h4>${escape(b.customerRelationships.title)}</h4><small>${escape(b.customerRelationships.subtitle)}</small></div></div>
+     <ul class="bmc-list">${b.customerRelationships.items.map(it=>`<li>${escape(it)}</li>`).join('')}</ul>
+    </div>
+    <div class="bmc-card bmc-channels">
+     <div class="bmc-head"><span class="bmc-icon">🚚</span><div><h4>${escape(b.channels.title)}</h4><small>${escape(b.channels.subtitle)}</small></div></div>
+     <ul class="bmc-list">${b.channels.items.map(it=>`<li>${escape(it)}</li>`).join('')}</ul>
+    </div>
+    <div class="bmc-card bmc-segments">
+     <div class="bmc-head"><span class="bmc-icon">👥</span><div><h4>${escape(b.customerSegments.title)}</h4><small>${escape(b.customerSegments.subtitle)}</small></div></div>
+     <ul class="bmc-list">${b.customerSegments.items.map(it=>`<li>${escape(it)}</li>`).join('')}</ul>
+    </div>
+    <div class="bmc-card bmc-costs">
+     <div class="bmc-head"><span class="bmc-icon">🏷</span><div><h4>${escape(b.costStructure.title)}</h4><small>${escape(b.costStructure.subtitle)}</small></div></div>
+     <ul class="bmc-list">${b.costStructure.items.map(it=>`<li>${escape(it)}</li>`).join('')}</ul>
+    </div>
+    <div class="bmc-card bmc-revenues highlight">
+     <div class="bmc-head"><span class="bmc-icon">💰</span><div><h4>${escape(b.revenueStreams.title)}</h4><small>${escape(b.revenueStreams.subtitle)}</small></div></div>
+     <ul class="bmc-list">${b.revenueStreams.items.map(it=>`<li>${escape(it)}</li>`).join('')}</ul>
+    </div>
+   </div>
+   <div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#64748b;">
+    <span>Designed for investor pitch packs, grant proposals &amp; incubator onboarding</span>
+    <span>Conceptualization and development: <a href="https://www.linkedin.com/in/beingbabu/" target="_blank" rel="noopener noreferrer">Professor Babu George</a></span>
+   </div>
+  </div>
+ `);
+ const dl=$('#bmc-download-btn');
+ if(dl)dl.onclick=()=>{
+  const clean=(p.name||'patent2market-venture').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+  download(`${clean||'venture'}-business-model-canvas.html`,generateBusinessModelCanvasHtml(p),'text/html');
+ };
+ const pr=$('#bmc-print-btn');
+ if(pr)pr.onclick=()=>window.print();
 }
 function download(name,text,type='text/plain'){const url=URL.createObjectURL(new Blob([text],{type}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),2000);notify('Download prepared');}
 function addEvidence(){modal(`<h2>Add a useful piece of evidence</h2><p>Record what the source actually establishes. Avoid copying personal information from interviews.</p><form id="evidence-form"><div class="field"><label for="e-title">Short title</label><input id="e-title" required maxlength="500" ></div><div class="form-grid"><div class="field"><label for="e-kind">Evidence type</label><select id="e-kind"><option value="customer">Customer conversation</option><option value="competition">Competitor / alternative</option><option value="cost">Supplier quote / cost</option><option value="technical">Technical evidence</option><option value="market">Market data</option><option value="regulatory">Country / regulatory requirement</option><option value="other">Other</option></select></div><div class="field"><label for="e-date">Date</label><input type="date" id="e-date"></div></div><div class="field"><label for="e-jurisdiction">Applicable country / region</label><input id="e-jurisdiction" maxlength="200"></div><div class="field"><label for="e-url">Source URL (optional)</label><input type="url" id="e-url" ></div><div class="field"><label for="e-note">What did you learn? What does it not establish?</label><textarea id="e-note" required maxlength="10000" rows="4"></textarea></div><button class="primary" type="submit">Save evidence</button></form>`);$('#evidence-form').onsubmit=e=>{e.preventDefault();if(p.evidence.length>=40){notify('Export your project before adding more than 40 evidence records.');return;}const url=$('#e-url').value;if(url&&!safeURL(url)){notify('Use an HTTP or HTTPS source URL.');return;}p.evidence.push({title:$('#e-title').value,kind:$('#e-kind').value,date:$('#e-date').value,jurisdiction:$('#e-jurisdiction').value,url:safeURL(url),note:$('#e-note').value});save();$('#modal').close();render();};}
@@ -687,11 +759,12 @@ if('autoComplementarySearch'in d){
 }
 if('exportDocx'in d){downloadDocx();return;}
 if('exportMd'in d){download((p.name?p.name.toLowerCase().replace(/[^a-z0-9]+/g,'-'):'patent2market-plan')+'.md',exportPlan(p),'text/markdown');return;}
+if('bmc'in d){showBusinessModelCanvas();return;}
 if('pitchDeck'in d){showPitchDeck();return;}
 if('filterSubsystem'in d){selectedSubsystem=d.filterSubsystem;renderTechnologies();return;}
 if('exportPlan'in d)download('patent2market-business-plan.md',exportPlan(p),'text/markdown');if('print'in d){document.querySelectorAll('.plan-section').forEach(x=>x.open=true);window.print();}if(d.editSection!==undefined){const i=Number(d.editSection),s=p.sections[i];modal(`<h2>${escape(s.title)}</h2><label for="section-edit">Edit this section</label><textarea id="section-edit" rows="16" maxlength="20000">${escape(s.text)}</textarea><button class="primary" id="save-section">Save section</button>`);$('#save-section').onclick=()=>{s.text=$('#section-edit').value;s.origin='User-edited · review evidence';save();$('#modal').close();render();};}};
 $('#content').addEventListener('keydown',e=>{if(e.target.id==='tech-search'&&e.key==='Enter'){e.preventDefault();const live=$('#live-search');if(live&&!live.disabled){live.click();return;}const local=$('#search-tech');if(local&&!local.disabled){local.click();return;}const ext=$('#external-search');if(ext)ext.click();}});
-$('#coach-action').onclick=()=>ask(coach[step][2]);$('#cancel-ai').onclick=()=>controller?.abort();$('#ai-settings').onclick=aiSettings;$('#close-modal').onclick=()=>$('#modal').close();$('#project-menu').onclick=projectMenu;
+$('#coach-action').onclick=()=>ask(coach[step][2]);$('#cancel-ai').onclick=()=>controller?.abort();$('#ai-settings').onclick=aiSettings;$('#close-modal').onclick=()=>$('#modal').close();$('#modal').addEventListener('close',()=>$('#modal').classList.remove('wide-dialog'));$('#project-menu').onclick=projectMenu;
 $('#coach-output').onclick=e=>{if(e.target.closest('[data-use-search]')){p.query=String(p.aiResults.clarify.result.searchTerms);save();go(1);}};
 $('#import-file').onchange=async e=>{const file=e.target.files[0];e.target.value='';if(!file)return;if(file.size>2000000){notify('Project file is too large (maximum 2 MB).');return;}try{const imported=validateProject(JSON.parse(await file.text()));modal(`<h2>Import ${escape(imported.name)}?</h2><p>This replaces the current workspace. Download your current project first if you need to retain it.</p><button class="primary" id="confirm-import">Replace workspace with imported project</button>`);$('#confirm-import').onclick=()=>{controller?.abort();p=imported;step=0;planInput=null;catalog=[];patentSource='';sourceScope='';pendingProposal=null;searchGeneration++;save();$('#modal').close();render();notify('Project imported');};}catch(error){notify(error.message||'Could not read this project.');}};
 $('#method').onclick=()=>modal('<h2>A thoughtful business starts with evidence.</h2><p>Patent2Market combines fresh searches from your chosen source, a guided venture workflow, explicit financial calculations, and optional AI assistance. Technology relevance is lexical search, not proof of suitability.</p><h3>Sources and rights</h3><p>NASA descriptions are attributed to their source. NASA does not endorse this app. No patent examples or snapshot catalogs are shipped. Search results do not establish current rights or licensing terms. User-recorded access assessments must be verified for the product and jurisdiction.</p><h3>AI and evidence</h3><p>AI results are suggestions. Worldwide patent search requires an approved Lens API credential. General market web research is not automated; its evidence assistant proposes research questions and tests. Add actual sources and observations to the notebook. Generated market or technical claims need independent verification.</p><h3>Privacy</h3><p>Project information is saved in browser storage, which is not encrypted or backed up. When you explicitly enable and request AI, project context is sent to the selected provider. Session API keys are kept in memory and forwarded through this app’s gateway to the named provider when you request AI. Custom endpoints receive requests directly from your browser. Keys are not saved in projects or browser storage. Source searches send your search terms to your chosen source. Providers apply their own data terms and charges. Browser AI and local Ollama run on your device where supported. No telemetry or analytics are included.</p><h3>Open foundation</h3><p>Original application code is MIT licensed with no third-party runtime packages. Optional model services are separate; OpenAI and Gemini are proprietary. Check the license of any local model you choose. The hosted preview is private; the application can be self-hosted.</p>');
