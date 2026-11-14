@@ -116,6 +116,15 @@ const CONCEPT_MAP={
  vehicle:['transport','automotive','propulsion']
 };
 
+const BROWSER_HEADERS={
+ 'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+ 'Accept':'application/json, text/plain, */*',
+ 'Accept-Language':'en-US,en;q=0.9',
+ 'Sec-Fetch-Dest':'empty',
+ 'Sec-Fetch-Mode':'cors',
+ 'Sec-Fetch-Site':'same-origin'
+};
+
 export async function fetchNasaWithFallback(query, fetcher){
  let results=[];
  const seen=new Set();
@@ -128,7 +137,7 @@ export async function fetchNasaWithFallback(query, fetcher){
   }
  };
  try{
-  const res=await fetcher('https://technology.nasa.gov/api/api/patent/'+encodeURIComponent(query.trim()),{signal:AbortSignal.timeout(15000),redirect:'error'});
+  const res=await fetcher('https://technology.nasa.gov/api/api/patent/'+encodeURIComponent(query.trim()),{headers:{'User-Agent':BROWSER_HEADERS['User-Agent'],'Accept':'application/json'},signal:AbortSignal.timeout(15000),redirect:'follow'});
   if(res.ok){
    const body=await res.json();
    addRows(body.results);
@@ -145,7 +154,7 @@ export async function fetchNasaWithFallback(query, fetcher){
   const uniqueTerms=[...new Set(terms)].slice(0,5);
   for(const term of uniqueTerms){
    try{
-    const r=await fetcher('https://technology.nasa.gov/api/api/patent/'+encodeURIComponent(term),{signal:AbortSignal.timeout(10000),redirect:'error'});
+    const r=await fetcher('https://technology.nasa.gov/api/api/patent/'+encodeURIComponent(term),{headers:{'User-Agent':BROWSER_HEADERS['User-Agent'],'Accept':'application/json'},signal:AbortSignal.timeout(10000),redirect:'follow'});
     if(r.ok){
      const b=await r.json();
      addRows(b.results);
@@ -222,22 +231,23 @@ export async function handlePatents(request,env,fetcher=fetch){
    const records=results.slice(0,50).map(nasaRecord).filter(Boolean);
    return respond({records,scope:`Up to 50 live NASA technology transfer records (${records.length} matching leads).`,retrievedAt:new Date().toISOString()});
   }else if(source==='google'){
-   let records=[],scope='';
+   let records=[],scope='',googleStatus=0,googleErr='';
    try{
     const qUrl='https://patents.google.com/xhr/query?url='+encodeURIComponent('q='+query.trim()+'&num=30');
-    response=await fetcher(qUrl,{headers:{'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'},signal:AbortSignal.timeout(15000)});
+    response=await fetcher(qUrl,{headers:BROWSER_HEADERS,signal:AbortSignal.timeout(15000),redirect:'follow'});
+    googleStatus=response.status;
     if(response.ok){
      const body=await response.json();
      const clusters=body.results?.cluster||[];
      records=clusters.flatMap(c=>c.result||[]).map(r=>r.patent).filter(Boolean).map(googleRecord).filter(Boolean);
      if(records.length)scope='Up to 30 live Google Patents worldwide matches with full text and legal status indicators.';
     }
-   }catch{}
+   }catch(e){googleErr=e.message;}
    if(!records.length){
     // Fall back to NASA live search with concept expansion
     const nasaResults=await fetchNasaWithFallback(query, fetcher);
     records=nasaResults.slice(0,50).map(nasaRecord).filter(Boolean);
-    scope='Retrieved from NASA Technology Transfer live API (Google Patents web query rate-limited).';
+    scope=records.length?`Retrieved from NASA Technology Transfer live API (Google: ${googleStatus||googleErr}).`:`Search returned 0 leads (Google: ${googleStatus||googleErr}). Try another term or open Google Patents directly.`;
    }
    return respond({records,scope,retrievedAt:new Date().toISOString()});
   }else if(source==='bigquery'){
