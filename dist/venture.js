@@ -84,15 +84,6 @@ function actions(){return `<div class="section-actions">${step?'<button class="s
 function summary(){const completed=[!!p.problem,!!p.technology,!!p.offer,!!p.evidence.length,false,!!p.sections.length];$('#steps').innerHTML=labels.map((label,i)=>`<button class="step ${i===step?'active':''} ${completed[i]?'done':''}" data-step="${i}" ${i===step?'aria-current="step"':''}><span class="step-num">${completed[i]?'✓':i+1}</span>${label}</button>`).join('');$('#project-summary').innerHTML=`<div class="summary-row"><strong>PROJECT</strong>${escape(p.name)}</div><div class="summary-row"><strong>WHO YOU WANT TO HELP</strong>${escape(p.customer||'Still taking shape')}</div><div class="summary-row"><strong>TECHNOLOGY LEAD</strong>${escape(selectedPatents(p).map(t=>t.title).join(' + ')||'Not chosen yet')}</div><div class="summary-row"><strong>EVIDENCE</strong>${p.evidence.length} source${p.evidence.length===1?'':'s'} recorded · ${missingEvidence(p).length} gaps to explore</div><div class="summary-row"><strong>BUSINESS PLAN</strong>${p.sections.length?'Draft created · review and refine':'Not drafted yet'}</div>`;}
 function render(){summary();const c=coach[step];$('#coach-title').textContent=c[0];$('#coach-copy').textContent=c[1];$('#coach-action').textContent='✧ '+c[3];$('#coach-action').disabled=aiBusy;$('#coach-output').innerHTML=aiHTML(p.aiResults[c[2]]?.result);const views=[problemView,technologyView,offerView,evidenceView,numbersView,planView];$('#content').innerHTML=views[step]()+actions();if(step===1)renderTechnologies();if(step===4)updateNumbers();}
 function problemView(){return head(1,'What needs to change?','Describe your opportunity and where the business will operate.')+`
-<div class="panel autopilot-hero">
- <span class="eyebrow" style="color:var(--ink);font-weight:750">⚡ AUTOPILOT VENTURE STUDIO · ZERO-FRICTION CREATION</span>
- <h3 style="margin-top:6px;font-size:18px">From Problem & Context to a Complete Business Plan</h3>
- <p>Describe your problem and where the venture will operate. Autopilot will automatically source relevant worldwide patents via Google Patents, formulate 3 tailored business models, assemble country regulatory evidence, calibrate unit economics, and write your complete 14-section plan.</p>
- <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:14px">
-  <button class="primary" data-full-autopilot ${aiBusy?'disabled':''}>🚀 Launch Full Autopilot</button>
-  <span class="small muted">Works with connected AI (Gemini, OpenAI, Anthropic, DeepSeek, Ollama) or guided heuristics.</span>
- </div>
-</div>
 <div class="panel">
  <div class="template-chips" style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;">
   <span class="small muted" style="align-self:center;font-weight:600;">Quick-start ideas:</span>
