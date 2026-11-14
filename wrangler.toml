@@ -1,6 +1,7 @@
 name = "patent2market"
 main = "dist/server/index.js"
 compatibility_date = "2024-11-01"
+workers_dev = true
 
 [build]
 command = "npm run build"
