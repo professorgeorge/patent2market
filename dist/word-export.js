@@ -36,9 +36,9 @@ export function createZip(files) {
     view.setUint32(0, 0x04034b50, true);
     view.setUint16(4, 20, true);
     view.setUint16(6, 0, true);
-    view.setUint16(8, 0, true);
-    view.setUint16(10, 0, true);
-    view.setUint16(12, 0, true);
+    view.setUint16(8, 0, true); // compression: 0 = stored
+    view.setUint16(10, 0x4000, true); // DOS time: 08:00:00
+    view.setUint16(12, 0x5821, true); // DOS date: 2024-01-01
     view.setUint32(14, f.crc, true);
     view.setUint32(18, f.size, true);
     view.setUint32(22, f.size, true);
@@ -53,8 +53,8 @@ export function createZip(files) {
     cdView.setUint16(4, 20, true);
     cdView.setUint16(6, 20, true);
     cdView.setUint16(8, 0, true);
-    cdView.setUint16(10, 0, true);
-    cdView.setUint16(12, 0, true);
+    cdView.setUint16(10, 0x4000, true); // DOS time: 08:00:00
+    cdView.setUint16(12, 0x5821, true); // DOS date: 2024-01-01
     cdView.setUint32(16, f.crc, true);
     cdView.setUint32(20, f.size, true);
     cdView.setUint32(24, f.size, true);
@@ -96,6 +96,7 @@ export function createZip(files) {
 
 function escapeXml(str) {
   return String(str || '')
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\uFFFE\uFFFF]/g, '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -201,12 +202,16 @@ export function buildDocx(project) {
   }
 
   // 14 Business Plan Sections
-  for (const s of project.sections) {
-    docBody += '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>' + escapeXml(s.title) + '</w:t></w:r></w:p>';
-    const paras = s.text.split(/\n\s*\n/);
+  for (const s of (project.sections || [])) {
+    if (!s || !s.title) continue;
+    docBody += '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t xml:space="preserve">' + escapeXml(s.title) + '</w:t></w:r></w:p>';
+    const paras = String(s.text || '').split(/\n\s*\n/);
     for (const p of paras) {
       if (!p.trim()) continue;
-      docBody += '<w:p><w:pPr><w:spacing w:before="60" w:after="120"/><w:jc w:val="both"/></w:pPr><w:r><w:t>' + escapeXml(p.trim()) + '</w:t></w:r></w:p>';
+      const lines = p.trim().split(/\r?\n/);
+      docBody += '<w:p><w:pPr><w:spacing w:before="60" w:after="120"/><w:jc w:val="both"/></w:pPr><w:r>' +
+        lines.map(line => '<w:t xml:space="preserve">' + escapeXml(line) + '</w:t>').join('<w:br/>') +
+        '</w:r></w:p>';
     }
   }
 

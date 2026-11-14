@@ -2,7 +2,7 @@ import {normalizePatent,selectedPatents,filterPatents,costLabel,validateSynthesi
 import {rank,tokens} from './core.js';
 import {newProject,safeURL,financials,financialInputsComplete,accessStatus,missingEvidence,context,draftPlan,exportPlan,validateProject,fingerprint,currencyForCountry,heuristicFinancials,heuristicEvidence,generateSolutionBlueprint} from './venture-core.js';
 import {discoverProviders,runAI,detectOllama,prepareBrowserAI} from './ai-client.js';
-import {buildDocx,generateWordHtml,pitchDeckSlides} from './word-export.js';
+import {buildDocx,pitchDeckSlides} from './word-export.js';
 
 const TEMPLATES=[
  {
@@ -396,18 +396,31 @@ function planView(){
  const sections=p.sections.map((s,i)=>`<details class="plan-section" open><summary>${escape(s.title)}</summary><div class="plan-text">${escape(s.text)}</div><span class="small muted">${escape(s.origin)}</span><button class="quiet" data-edit-section="${i}">Edit section</button></details>`).join('');
  return head(6,'A plan you can put to work.','Bring the opportunity, technology, offer, evidence, and finances together. Review the draft, improve the weak assumptions, and decide what to test first.')+`
  ${stale?'<div class="notice warning">Project inputs have changed. Review or regenerate the plan to align the narrative and figures.</div>':''}
- <div class="panel"><h3>${p.sections.length?'Your working business plan':'Ready to bring it together?'}</h3><p>${p.sections.length?'Every section is editable. AI-generated content remains a proposal until you verify it.':'Connect AI to write a plan from your business context, sourced evidence, and financial inputs.'}</p>
- <div class="plan-toolbar">
-  <button class="primary" data-ai-plan>✧ Write with AI</button>
+ <div class="panel">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:16px;">
+   <div>
+    <h3 style="margin:0 0 4px 0;">${p.sections.length?'Your working business plan':'Ready to bring it together?'}</h3>
+    <p style="margin:0;" class="small muted">${p.sections.length?'Every section is editable. AI-generated content remains a proposal until you verify it.':'Connect AI or auto-draft a plan from your business context, sourced evidence, and financial inputs.'}</p>
+   </div>
+   <div>
+    <button class="${p.sections.length?'secondary':'primary'}" data-ai-plan>✧ ${p.sections.length?'Regenerate Plan with AI':'Draft Plan with AI'}</button>
+   </div>
+  </div>
+
   ${p.sections.length?`
-    <button class="secondary" data-export-docx>Download Word (.docx) ↓</button>
-    <button class="secondary" data-export-doc>Download Word (.doc) ↓</button>
+  <div class="export-tray" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:12px 14px;background:var(--subtle);border:1px solid var(--border);border-radius:6px;margin-bottom:18px;">
+   <div style="font-size:12px;font-weight:600;color:var(--ink);text-transform:uppercase;letter-spacing:0.5px;">Export &amp; Share Plan:</div>
+   <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+    <button class="primary" data-export-docx>Download Word (.docx) ↓</button>
     <button class="secondary" data-export-md>Download Markdown (.md) ↓</button>
     <button class="secondary" data-pitch-deck>10-Slide Pitch Deck ❖</button>
     <button class="secondary" data-print>Print / Save PDF 🖨</button>
+   </div>
+  </div>
   `:''}
-</div>
- ${p.sections.length?'<h1 class="print-only">'+escape(p.name)+'</h1>'+sections:'<div class="empty">Your plan will cover the customer, solution, technology access, market, business model, operations, finances, risks, and a 90-day roadmap.</div>'}</div>`;
+
+  ${p.sections.length?'<h1 class="print-only">'+escape(p.name)+'</h1>'+sections:'<div class="empty">Your plan will cover the customer, solution, technology access, market, business model, operations, finances, risks, and a 90-day roadmap.</div>'}
+ </div>`;
 }
 function aiHTML(result){if(!result)return '';const renderValue=(v)=>{if(v===null||v===undefined)return '';if(Array.isArray(v))return '<ul>'+v.map(x=>'<li>'+renderValue(x)+'</li>').join('')+'</ul>';if(typeof v==='object')return Object.entries(v).filter(([k])=>!['sections','concepts'].includes(k)).map(([k,x])=>`<h4>${escape(k.replace(/([A-Z])/g,' $1'))}</h4>${renderValue(x)}`).join('');return '<p>'+escape(v)+'</p>';};return `<div class="ai-result"><span class="badge">AI SUGGESTION · VERIFY</span>${result.concepts?'<p>Three concepts are available in Your offer.</p>':result.sections?'<p>Your plan is ready for review.</p>':renderValue(result)}${result.searchTerms?'<button class="secondary" data-use-search>Use suggested search</button>':''}</div>`;}
 async function ask(stage){if(aiBusy)return;if(!p.problem.trim()){notify('Describe the problem first so the assistant has a starting point.');go(0);return;}if(['plan','local'].includes(stage)&&!p.country.trim()){notify('Enter the operating country first.');go(0);return;}if(stage==='technology'&&!p.technology){notify('Choose a technology first.');return;}if(settings.provider==='guided'||!settings.consent){await aiSettings();return;}if(stage==='plan'&&p.sections.length){modal('<h2>Replace the current plan?</h2><p>Your edited sections will be replaced only if a complete new plan is returned. Download the current plan first if you want to keep a copy.</p><button class="primary" id="confirm-ai-plan">Generate replacement</button>');$('#confirm-ai-plan').onclick=()=>{$('#modal').close();executeAI(stage);};return;}await executeAI(stage);}
@@ -437,22 +450,30 @@ modal(`<h2>Lens API access</h2><p>Use an approved Lens API token. It remains in 
 function go(index){step=Math.max(0,Math.min(5,index));render();$('#content').focus({preventScroll:true});if(step===1&&!catalog.length&&(p.query||p.problem)){p.query=p.query||p.problem;liveBusy=true;render();searchWorldwide(p.query,AbortSignal.timeout(30000)).finally(()=>{liveBusy=false;render();});}}
 
 function downloadDocx(){
- const bytes=buildDocx(p);
- const blob=new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
- const slug=(p.name||'patent2market-venture').toLowerCase().replace(/[^a-z0-9]+/g,'-');
- const url=URL.createObjectURL(blob);
- const a=document.createElement('a');a.href=url;a.download=`${slug}-business-plan.docx`;a.click();
- setTimeout(()=>URL.revokeObjectURL(url),2000);
- notify('Word document (.docx) downloaded');
-}
-function downloadDoc(){
- const html=generateWordHtml(p);
- const blob=new Blob(['\ufeff'+html],{type:'application/msword;charset=utf-8'});
- const slug=(p.name||'patent2market-venture').toLowerCase().replace(/[^a-z0-9]+/g,'-');
- const url=URL.createObjectURL(blob);
- const a=document.createElement('a');a.href=url;a.download=`${slug}-business-plan.doc`;a.click();
- setTimeout(()=>URL.revokeObjectURL(url),2000);
- notify('Word document (.doc) downloaded');
+ try{
+  if(!p.sections||!p.sections.length){
+   p.sections=draftPlan(p);
+   save();
+  }
+  const bytes=buildDocx(p);
+  const blob=new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
+  const clean=(p.name||'patent2market-venture').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+  const filename=`${clean||'patent2market-venture'}-business-plan.docx`;
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.style.display='none';
+  a.href=url;
+  a.download=filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{
+   if(a.parentNode)a.parentNode.removeChild(a);
+   URL.revokeObjectURL(url);
+  },2000);
+  notify('Word document (.docx) downloaded');
+ }catch(err){
+  notify('Could not export Word document: '+(err.message||'unexpected error'));
+ }
 }
 function showPitchDeck(initialSlide=0){
  let current=initialSlide;
@@ -594,7 +615,6 @@ if('autoComplementarySearch'in d){
  return;
 }
 if('exportDocx'in d){downloadDocx();return;}
-if('exportDoc'in d){downloadDoc();return;}
 if('exportMd'in d){download((p.name?p.name.toLowerCase().replace(/[^a-z0-9]+/g,'-'):'patent2market-plan')+'.md',exportPlan(p),'text/markdown');return;}
 if('pitchDeck'in d){showPitchDeck();return;}
 if('filterSubsystem'in d){selectedSubsystem=d.filterSubsystem;renderTechnologies();return;}
