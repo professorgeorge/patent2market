@@ -66,3 +66,23 @@ test('BigQuery gateway checks project configuration and parses query response',a
  assert.equal(data.records[0].title,'Filtration method');
 });
 
+test('All available sources gateway queries both Google Patents and NASA',async()=>{
+ const req=new Request('https://app.test/api/patents',{method:'POST',headers:{Origin:'https://app.test'},body:JSON.stringify({query:'solar desalination',source:'all'})});
+ const mockFetcher=async(url)=>{
+  if(url.includes('patents.google.com')){
+   return Response.json({results:{cluster:[{result:[{patent:{publication_number:'US11223344B2',title:'Solar water distiller',snippet:'Solar distillation unit',family_metadata:{aggregated:{country_status:[{country_code:'US',best_patent_stage:{state:'ACTIVE'}}]}}}}]}]}});
+  }
+  if(url.includes('technology.nasa.gov')){
+   return Response.json({results:[['1','MSC-12345-1','NASA Solar Aerogel Water Purifier','Aerogel distillation system','Active','Environment','','','','','https://example.com/img.png']]});
+  }
+  return Response.json({});
+ };
+ const res=await handlePatents(req,{},mockFetcher);
+ assert.equal(res.status,200);
+ const data=await res.json();
+ assert.ok(data.records.length>=2);
+ assert.ok(data.records.some(r=>r.id==='US11223344B2'));
+ assert.ok(data.records.some(r=>r.id==='MSC-12345-1'));
+ assert.match(data.scope,/Unified search across all available sources/);
+});
+

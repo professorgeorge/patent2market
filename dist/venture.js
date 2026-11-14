@@ -72,7 +72,7 @@ const TEMPLATES=[
 ];
 const $=s=>document.querySelector(s),escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const STORAGE='patent2market-venture-v2';let p=newProject(),settings={provider:'guided',ollamaURL:'http://localhost:11434',ollamaModel:'',consent:false};try{const stored=JSON.parse(localStorage.getItem(STORAGE)||'null');if(stored){p=validateProject(stored);if(stored.aiResults&&typeof stored.aiResults==='object')p.aiResults=stored.aiResults;}}catch{}
-let patentSource='nasa',lensKey='',bqProject='',bqKey='',sourceScope='',searchGeneration=0,ollamaTransport='browser',selectedSubsystem='';let step=0,catalog=[],category='',limit=8,onlyReviewed=false,fullTextOnly=false,territory='',liveEnabled=false,liveBusy=false,pendingProposal=null,aiBusy=false,controller,providerInfo={cloud:[],browser:'unavailable'},toastTimer,planInput=null;try{const stored=JSON.parse(localStorage.getItem(STORAGE)||'null');planInput=typeof stored?._planInput==='string'?stored._planInput:null;}catch{}
+let patentSource='google',lensKey='',bqProject='',bqKey='',sourceScope='',searchGeneration=0,ollamaTransport='browser',selectedSubsystem='';let step=0,catalog=[],category='',limit=8,onlyReviewed=false,fullTextOnly=false,territory='',liveEnabled=false,liveBusy=false,pendingProposal=null,aiBusy=false,controller,providerInfo={cloud:[],browser:'unavailable'},toastTimer,planInput=null;try{const stored=JSON.parse(localStorage.getItem(STORAGE)||'null');planInput=typeof stored?._planInput==='string'?stored._planInput:null;}catch{}
 const labels=['The problem','Technology','Your offer','The evidence','The numbers','Your plan'];
 const coach=[['Find the useful question.','Turn a broad problem into a specific customer need. Your assistant asks the questions that change the direction.','clarify','Help clarify my opportunity'],['See beyond the patent.','Understand the mechanism, what it might help with, and the technical questions to investigate.','technology','Explain my selected technology'],['Useful ingredients. Different businesses.','Explore a product, a service, or a simpler route to the same outcome. Choose the offer that fits your customer.','concepts','Explore business concepts'],['Trade guesses for evidence.','Find the conversations, comparisons, and tests that would make this business more credible.','research','Design my evidence plan'],['Give the idea a reality check.','Challenge the economics, the difficult assumptions, and whether a simpler approach could work.','critique','Challenge my assumptions'],['Make the plan useful.','Bring your decisions, evidence, and numbers into a coherent business plan with explicit next steps.','plan','Write my business plan']];
 function notify(text){$('#toast').textContent=text;$('#toast').style.display='block';clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').style.display='none',4500);}
@@ -122,9 +122,18 @@ function problemView(){return head(1,'What needs to change?','Describe your oppo
  <button type="button" class="quiet" data-clear-problem style="color:#b91c1c;margin-left:auto;">✕ Clear all inputs</button>
 </div>
 <p class="small muted">Add dated official sources in Evidence to substantiate requirements. AI will flag unverified obligations rather than supply assumed tax rates or approvals.</p></div>`;}
-const sourceChoices=[['lens','Lens · integrated worldwide search'],['nasa','NASA · integrated technology search'],['google','Google Patents · external search'],['epo','EPO Espacenet · external search'],['wipo','WIPO PATENTSCOPE · external search'],['imports','My sourced documents']];
-function sourceLink(){const q=encodeURIComponent(p.query||p.problem);return {google:'https://patents.google.com/?q='+q,epo:'https://worldwide.espacenet.com/patent/search?q='+q,wipo:'https://patentscope.wipo.int/search/en/search.jsf'}[patentSource]||'';}
-function sourceReady(){return patentSource==='nasa'||patentSource==='lens'&&(liveEnabled||!!lensKey);}
+const sourceChoices=[
+ ['google','Google Patents · integrated worldwide search (Default)'],
+ ['all','🌐 All Available Sources (Google Patents + NASA)'],
+ ['nasa','NASA · integrated technology search'],
+ ['bigquery','Google Patents BigQuery · public dataset'],
+ ['lens','Lens · integrated worldwide search'],
+ ['epo','EPO Espacenet · external search'],
+ ['wipo','WIPO PATENTSCOPE · external search'],
+ ['imports','My sourced documents']
+];
+function sourceLink(){const q=encodeURIComponent(p.query||p.problem);return {google:'https://patents.google.com/?q='+q,all:'https://patents.google.com/?q='+q,epo:'https://worldwide.espacenet.com/patent/search?q='+q,wipo:'https://patentscope.wipo.int/search/en/search.jsf'}[patentSource]||'';}
+function sourceReady(){return ['google','all','nasa'].includes(patentSource)||(patentSource==='lens'&&(liveEnabled||!!lensKey))||(patentSource==='bigquery'&&(liveEnabled||!!bqProject));}
 function availablePatents(){return [...new Map([...(patentSource==='imports'?selectedPatents(p):catalog)].map(t=>[t.id,t])).values()];}
 function matchingPatents(query=patentSource==='imports'?'':p.query||p.problem){
   const filtered=filterPatents(availablePatents(),{fullText:fullTextOnly,openOnly:onlyReviewed,jurisdiction:territory,category});
@@ -143,15 +152,17 @@ function renderArchitectureCanvas(patents){
   </div>
  </div>`;
 }
-function technologyView(){return head(2,'Source the technology.','Choose a source and run a fresh search. NASA Technology Transfer live search is active by default.')+`
+function technologyView(){return head(2,'Source the technology.','Choose a source and run a fresh search. Google Patents worldwide live search is active by default.')+`
 <div class="panel">
  <div class="field"><label for="patent-source">Patent source</label><select id="patent-source">${sourceChoices.map(([id,label])=>`<option value="${id}" ${patentSource===id?'selected':''}>${label}</option>`).join('')}</select></div>
+ ${patentSource==='google'?'<p class="small"><strong>Google Patents live search (Default):</strong> Direct access to 100M+ international patents (USPTO, EPO, WIPO, etc.) with active/expired legal status and full-text links. Enter any problem or keywords.</p>':''}
+ ${patentSource==='all'?'<p class="small"><strong>All Available Sources:</strong> Simultaneous search across Google Patents worldwide database and NASA Technology Transfer catalog, combined and deduplicated into a single result stream.</p>':''}
  ${patentSource==='nasa'?'<p class="small"><strong>NASA Technology Transfer live search:</strong> Direct access to verified patents and technology transfer summaries with concept expansion. Enter any keywords or your problem statement.</p>':''}
- ${patentSource==='google'?'<p class="small">Opens Google Patents in a new tab with your exact search query. Add chosen patent IDs or numbers below.</p>':''}
  ${patentSource==='bigquery'?`<p class="small"><strong>Google Patents BigQuery Public Dataset:</strong> Query <code>patents-public-data.patents.publications</code> directly via Google Cloud BigQuery API.</p><button class="secondary" data-source-settings>BigQuery API settings</button>`:''}
  ${patentSource==='lens'?`<p class="small">${liveEnabled?'Host API access is configured.':'An approved Lens API token is required.'} You may use your own session token.</p><button class="secondary" data-source-settings>Lens API settings</button>`:''}
  <div class="search-row"><input id="tech-search" aria-label="Technology search" maxlength="600" value="${escape(p.query)}" placeholder="Enter search terms (e.g. solar water purification, evaporative cooling)"><button class="primary" id="live-search" ${!sourceReady()||liveBusy||aiBusy?'disabled':''}>${liveBusy?'Searching…':'Search source now'}</button></div>
- ${['google','epo','wipo'].includes(patentSource)&&sourceLink()?`<a id="external-search" href="${escape(sourceLink())}" target="_blank" rel="noopener noreferrer">Open ${patentSource==='google'?'Google Patents':patentSource.toUpperCase()} ↗</a><p class="small">Search on the source website, then add the document below.</p>`:''}
+ ${['google','all'].includes(patentSource)&&sourceLink()?`<a id="external-search" href="${escape(sourceLink())}" target="_blank" rel="noopener noreferrer">Open Google Patents in new tab ↗</a>`:''}
+ ${['epo','wipo'].includes(patentSource)&&sourceLink()?`<a id="external-search" href="${escape(sourceLink())}" target="_blank" rel="noopener noreferrer">Open ${patentSource.toUpperCase()} ↗</a><p class="small">Search on the source website, then add the document below.</p>`:''}
  <div class="filters"><label><input id="fulltext-only" type="checkbox" ${fullTextOnly?'checked':''}> Full document available</label><label><input id="reviewed-only" type="checkbox" ${onlyReviewed?'checked':''}> Documented expired / open-license leads only</label><select id="tech-territory" aria-label="Patent jurisdiction"><option value="">All jurisdictions</option>${[...new Set(availablePatents().map(t=>t.jurisdiction).filter(Boolean))].sort().map(c=>`<option ${territory===c?'selected':''}>${escape(c)}</option>`).join('')}</select></div>
  <p class="small muted">Document availability is separate from permission to use an invention. Check territorial status and related patent families.</p>
  <button class="secondary" data-import-tech>Add a sourced patent or open design</button>

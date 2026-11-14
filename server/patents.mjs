@@ -163,22 +163,61 @@ export async function handlePatents(request,env,fetcher=fetch){
  if(request.method==='GET')return respond({
   enabled:!!env.LENS_API_TOKEN,
   sources:[
+   {id:'google',enabled:true,label:'Google Patents (Worldwide live search · Default)'},
+   {id:'all',enabled:true,label:'All Available Sources (Google Patents + NASA)'},
    {id:'nasa',enabled:true,label:'NASA Technology Transfer (Live search)'},
-   {id:'google',enabled:true,label:'Google Patents (Worldwide live search)'},
    {id:'bigquery',enabled:bqConfigured,label:'Google Patents Public Datasets (BigQuery)'},
    {id:'lens',enabled:!!env.LENS_API_TOKEN,label:'Lens API'}
   ]
  });
  if(request.method!=='POST')return respond({error:'Use POST'},405);
- if(request.headers.get('Origin')!==new URL(request.url).origin)return respond({error:'Same-origin requests only'},403);
+ const origin=request.headers.get('Origin')||request.headers.get('origin');
+ const reqUrl=new URL(request.url);
+ const host=(request.headers.get('Host')||reqUrl.host).toLowerCase();
+ let originMatches=false;
+ if(origin){
+  try{
+   const originUrl=new URL(origin);
+   originMatches=(origin===reqUrl.origin)||(originUrl.host.toLowerCase()===host);
+  }catch{}
+ }
+ if(!originMatches)return respond({error:'Same-origin requests only'},403);
  const now=Date.now(),key=request.headers.get('CF-Connecting-IP')||'local';for(const [k,v]of patentBuckets)if(now-v.at>60000)patentBuckets.delete(k);const bucket=patentBuckets.get(key)||{at:now,n:0};if(bucket.n++>=30)return respond({error:'Please wait a minute before searching again.'},429);patentBuckets.set(key,bucket);
  try{
   const raw=await request.text();if(raw.length>8000)return respond({error:'Search is too long'},413);
   const {query,source='lens',apiKey,projectId}=JSON.parse(raw);
   if(typeof query!=='string'||!query.trim()||query.length>600)return respond({error:'Enter up to 600 characters of search terms'},400);
-  if(!['google','bigquery','lens','nasa'].includes(source))return respond({error:'Choose an integrated search source or open the external source website.'},400);
+  if(!['google','all','bigquery','lens','nasa'].includes(source))return respond({error:'Choose an integrated search source or open the external source website.'},400);
   let response;
-  if(source==='nasa'){
+  if(source==='all'){
+   const [googleRes,nasaRes]=await Promise.allSettled([
+    (async()=>{
+     try{
+      const qUrl='https://patents.google.com/xhr/query?url='+encodeURIComponent('q='+query.trim()+'&num=30');
+      const r=await fetcher(qUrl,{headers:{'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36','Accept':'application/json'},signal:AbortSignal.timeout(15000)});
+      if(!r.ok)return [];
+      const body=await r.json();
+      return (body.results?.cluster||[]).flatMap(c=>c.result||[]).map(x=>x.patent).filter(Boolean).map(googleRecord).filter(Boolean);
+     }catch{return [];}
+    })(),
+    (async()=>{
+     try{
+      const nasaRows=await fetchNasaWithFallback(query,fetcher);
+      return nasaRows.slice(0,30).map(nasaRecord).filter(Boolean);
+     }catch{return [];}
+    })()
+   ]);
+   const gRecords=googleRes.status==='fulfilled'?googleRes.value:[];
+   const nRecords=nasaRes.status==='fulfilled'?nasaRes.value:[];
+   const seen=new Set();
+   const records=[];
+   const maxLen=Math.max(gRecords.length,nRecords.length);
+   for(let i=0;i<maxLen;i++){
+    if(i<gRecords.length&&!seen.has(gRecords[i].id)){seen.add(gRecords[i].id);records.push(gRecords[i]);}
+    if(i<nRecords.length&&!seen.has(nRecords[i].id)){seen.add(nRecords[i].id);records.push(nRecords[i]);}
+   }
+   return respond({records:records.slice(0,60),scope:`Unified search across all available sources (Google Patents & NASA): ${records.length} leads retrieved.`,retrievedAt:new Date().toISOString()});
+  }else if(source==='nasa'){
    const results=await fetchNasaWithFallback(query, fetcher);
    const records=results.slice(0,50).map(nasaRecord).filter(Boolean);
    return respond({records,scope:`Up to 50 live NASA technology transfer records (${records.length} matching leads).`,retrievedAt:new Date().toISOString()});
