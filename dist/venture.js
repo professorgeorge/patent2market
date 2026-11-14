@@ -1,6 +1,6 @@
 import {normalizePatent,selectedPatents,filterPatents,costLabel,validateSynthesis,classifySubsystem} from './patents.js';
 import {rank,tokens} from './core.js';
-import {newProject,safeURL,financials,financialInputsComplete,accessStatus,missingEvidence,context,draftPlan,exportPlan,validateProject,fingerprint,currencyForCountry,heuristicFinancials,heuristicEvidence} from './venture-core.js';
+import {newProject,safeURL,financials,financialInputsComplete,accessStatus,missingEvidence,context,draftPlan,exportPlan,validateProject,fingerprint,currencyForCountry,heuristicFinancials,heuristicEvidence,generateSolutionBlueprint} from './venture-core.js';
 import {discoverProviders,runAI,detectOllama,prepareBrowserAI} from './ai-client.js';
 import {buildDocx,generateWordHtml,pitchDeckSlides} from './word-export.js';
 
@@ -142,13 +142,51 @@ function matchingPatents(query=patentSource==='imports'?'':p.query||p.problem){
   return ranked.length?ranked:filtered.map(r=>({record:r,score:0,highlights:[]}));
 }
 function renderArchitectureCanvas(patents){
- if(patents.length<2)return '';
+ if(!patents.length)return '';
+ const bp=generateSolutionBlueprint(p);
+ const topGaps=bp.gaps.slice(0,3);
  return `<div class="architecture-canvas">
-  <div class="architecture-header"><h4 style="margin:0;font-size:14px;color:#163d36;">❖ Multi-Patent Modular System Architecture</h4><span class="subsystem-badge">${patents.length} Subsystems Coupled</span></div>
-  <p class="small muted" style="margin-bottom:12px;">Visual integration model: Primary mechanism interfaced with auxiliary subsystems to create the venture solution.</p>
+  <div class="architecture-header">
+   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+    <h4 style="margin:0;font-size:14px;color:#163d36;">❖ Comprehensive Solution Blueprint · Modular System Architecture</h4>
+    <span class="subsystem-badge" style="background:#163d36;color:#ffffff;">${patents.length} Patented Core</span>
+    <span class="subsystem-badge" style="background:#e8f5e9;color:#1b5e20;">${bp.gaps.length} AI Gap-Fills</span>
+   </div>
+   <span class="small muted" style="font-weight:600;">100% Commercial System</span>
+  </div>
+  <p class="small muted" style="margin-bottom:12px;">Visual integration model: Proprietary patent innovations coupled with AI-engineered off-the-shelf auxiliary subsystems to create a complete, buildable product.</p>
   <div class="architecture-grid">
-   ${patents.map((t,i)=>`<div class="arch-node"><span class="arch-tag">${escape(t.subsystem||classifySubsystem(t))}</span><div class="arch-title">[T${i+1}] ${escape(t.title)}</div><small class="muted">${escape(t.id)} · ${escape(t.jurisdiction||'US')}</small></div>${i<patents.length-1?'<div class="arch-connector">+<span>Interfaced</span></div>':'<div class="arch-connector">➔<span>Synthesized</span></div>'}`).join('')}
+   ${patents.map((t,i)=>`<div class="arch-node"><span class="arch-tag">${escape(t.subsystem||classifySubsystem(t))}</span><div class="arch-title">[T${i+1}] ${escape(t.title)}</div><small class="muted">${escape(t.id)} · ${escape(t.jurisdiction||'US')}</small></div><div class="arch-connector">+<span>Interfaced</span></div>`).join('')}
+   ${topGaps.map((g,i)=>`<div class="arch-node gap-node"><span class="arch-tag">AI Gap-Fill · ${escape(g.subsystem)}</span><div class="arch-title" style="font-size:11px;">${escape(g.role.slice(0,65))}…</div><span class="arch-badge">COTS Off-The-Shelf</span></div>${i<topGaps.length-1?'<div class="arch-connector">+<span>Interfaced</span></div>':'<div class="arch-connector">➔<span>Synthesized</span></div>'}`).join('')}
    <div class="arch-node solution-node"><span class="arch-tag">Venture Offering</span><div class="arch-title">${escape(p.name||'Commercial Solution')}</div><small style="color:#c8e6c9;">Deploy in ${escape(p.country||'Target Market')}</small></div>
+  </div>
+
+  <div class="blueprint-summary-box">
+   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+    <strong style="color:#163d36;font-size:13px;">✨ AI-Engineered Subsystems (Filling Architectural Gaps with Native Knowledge)</strong>
+    <span class="small muted">No single patent makes a full product · COTS BOM ready</span>
+   </div>
+   <p class="small muted" style="margin:4px 0 10px 0;">${escape(bp.integrationModel)}</p>
+   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px;">
+    ${bp.gaps.map(g=>`
+     <div style="background:#f9faf8;border-left:3px solid #2e7d32;padding:8px 10px;border-radius:0 4px 4px 0;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;">
+       <strong style="color:#163d36;font-size:12px;">${escape(g.subsystem)}</strong>
+       <span style="font-size:9px;background:#e8f5e9;color:#1b5e20;padding:1px 5px;border-radius:4px;font-weight:700;">COTS</span>
+      </div>
+      <p style="margin:3px 0 4px 0;font-size:11px;color:#2c3e50;">${escape(g.role)}</p>
+      <div style="font-size:10px;color:#556b2f;margin-bottom:4px;"><strong>Recommended Components:</strong> ${escape(g.cotsComponents)}</div>
+      <div style="font-size:10px;color:#64748b;"><strong>Interface:</strong> ${escape(g.interface)}</div>
+      <div style="margin-top:6px;display:flex;gap:6px;">
+       <button type="button" class="quiet" data-search-complementary="${escape(g.searchQuery)}" style="padding:0;font-size:11px;color:#21594f;text-decoration:underline;">🔍 Find complementary patents for this gap ↗</button>
+      </div>
+     </div>
+    `).join('')}
+   </div>
+   <div style="margin-top:12px;padding-top:10px;border-top:1px solid #e0e7db;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+    <button type="button" class="secondary" data-auto-complementary-search style="font-size:12px;">⚡ Auto-source complementary patents for remaining gaps</button>
+    <span class="small muted">Automatically searches Google Patents to couple auxiliary patents into the solution blueprint.</span>
+   </div>
   </div>
  </div>`;
 }
@@ -248,8 +286,9 @@ async function runFullAutopilot(){
  p.technologies=[...subMap.values()];
 }
   p.technology=p.technologies[0]||null;
+  p.solutionBlueprint=generateSolutionBlueprint(p);
   const leadTitle=p.technology?p.technology.title:'Open technical architecture';
-  updateProgress(3,'ap-s3',`Selected lead technology: ${leadTitle}`,'Grounded in patent evidence');
+  updateProgress(3,'ap-s3',`Synthesized solution blueprint: ${p.technologies.length} Patented Core + ${p.solutionBlueprint.gaps.length} AI Gap-Fills`,'Complete end-to-end product architecture');
 
   $('#ai-status').textContent='Autopilot: 4/6 Formulating business models and offer...';
   let conceptsResult=null;
@@ -501,8 +540,57 @@ if('autoMultiPatent'in d){
  if(picks.length){
   p.technologies=picks;
   p.technology=picks[0];
+  p.solutionBlueprint=generateSolutionBlueprint(p);
   save();render();notify(`Selected ${picks.length} complementary subsystem patents.`);
  }else notify('Search for technologies first.');
+ return;
+}
+if(d.searchComplementary){
+ const targetQuery=d.searchComplementary;
+ p.query=targetQuery;
+ const searchInput=$('#tech-search');
+ if(searchInput)searchInput.value=targetQuery;
+ limit=8;
+ save();
+ liveBusy=true;
+ render();
+ searchWorldwide(targetQuery,AbortSignal.timeout(35000)).then(()=>{
+  notify(`Found complementary patent leads for: "${targetQuery}".`);
+ }).catch(err=>notify(err.message)).finally(()=>{
+  liveBusy=false;
+  render();
+ });
+ return;
+}
+if('autoComplementarySearch'in d){
+ const bp=generateSolutionBlueprint(p);
+ if(!bp.complementaryQueries.length){
+  notify('All core product subsystems are already addressed.');
+  return;
+ }
+ const targetQuery=bp.complementaryQueries[0];
+ notify(`Auto-sourcing complementary patents for gap: "${targetQuery}"...`);
+ liveBusy=true;
+ render();
+ searchWorldwide(targetQuery,AbortSignal.timeout(35000)).then(()=>{
+  const currentIds=new Set(selectedPatents(p).map(t=>t.id));
+  const currentSubs=new Set(selectedPatents(p).map(t=>t.subsystem||classifySubsystem(t)));
+  const candidate=availablePatents().find(t=>!currentIds.has(t.id)&&!currentSubs.has(t.subsystem||classifySubsystem(t)));
+  if(candidate&&selectedPatents(p).length<6){
+   p.technologies=[...selectedPatents(p),{...candidate}];
+   p.technology=p.technologies[0];
+   p.solutionBlueprint=generateSolutionBlueprint(p);
+   save();
+   render();
+   notify(`Coupled complementary patent: [${candidate.subsystem||classifySubsystem(candidate)}] ${candidate.title}`);
+  }else{
+   render();
+   notify('Discovered complementary patent leads. Click "+ Add ingredient" to couple.');
+  }
+ }).catch(err=>notify(err.message)).finally(()=>{
+  liveBusy=false;
+  render();
+ });
  return;
 }
 if('exportDocx'in d){downloadDocx();return;}

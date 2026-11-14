@@ -35,6 +35,10 @@
 .architecture-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
 .architecture-grid{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px;margin:14px 0}
 .arch-node{background:#ffffff;border:1.5px solid #163d36;border-radius:6px;padding:10px 14px;min-width:170px;max-width:220px;box-shadow:0 2px 5px rgba(0,0,0,0.05)}
+.arch-node.gap-node{background:#fafcf8;border:1.5px dashed #2e7d32;border-radius:6px;padding:10px 14px;min-width:170px;max-width:220px;box-shadow:0 2px 5px rgba(0,0,0,0.03)}
+.arch-node.gap-node .arch-tag{color:#2e7d32}
+.arch-badge{display:inline-block;background:#e8f5e9;color:#1b5e20;font-size:9px;font-weight:700;padding:2px 6px;border-radius:10px;margin-top:4px}
+.blueprint-summary-box{background:#ffffff;border:1px solid #d4dfd0;border-radius:6px;padding:12px 14px;margin-top:12px}
 .arch-node.solution-node{background:#163d36;color:#ffffff;border-color:#0f2c27}
 .arch-node.solution-node .arch-tag{color:#a5d6a7}
 .arch-tag{font-size:10px;text-transform:uppercase;font-weight:700;color:#5a7356;display:block;margin-bottom:4px}

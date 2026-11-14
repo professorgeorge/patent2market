@@ -1,4 +1,4 @@
-const CACHE='patent2market-v4.5';
+const CACHE='patent2market-v4.6';
 const ASSETS=['./','./index.html','./explorer.html','./core.js','./venture.js','./venture.css','./venture-core.js','./prompts.js','./ai-client.js','./patents.js','./word-export.js','./manifest.webmanifest','./icon.svg','./icon-192.png','./icon-512.png'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('patent2market-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));

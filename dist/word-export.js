@@ -1,7 +1,7 @@
 // word-export.js — Microsoft Word (.docx and .doc) and Pitch Deck export engine for Patent2Market
 // Zero external runtime dependencies; pure ES module with standard OpenXML and PKZip specification.
 
-import { financials } from './venture-core.js';
+import { financials, generateSolutionBlueprint } from './venture-core.js';
 import { selectedPatents, costLabel } from './patents.js';
 
 // CRC-32 Lookup Table
@@ -166,13 +166,22 @@ export function buildDocx(project) {
 
   // Multi-Patent Architecture Summary if present
   if (patents.length) {
-    docBody += '<w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>Selected Technology &amp; Patent Stack (' + patents.length + ' leads)</w:t></w:r></w:p>';
+    const bp = generateSolutionBlueprint(project);
+    docBody += '<w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>Technology &amp; Comprehensive Solution Blueprint (' + patents.length + ' patented, ' + bp.gaps.length + ' AI gap-fills)</w:t></w:r></w:p>';
     for (let i = 0; i < patents.length; i++) {
       const t = patents[i];
       docBody += '<w:p><w:pPr><w:spacing w:before="60" w:after="40"/></w:pPr>' +
-        '<w:r><w:rPr><w:b/><w:color w:val="21594F"/></w:rPr><w:t>[T' + (i + 1) + '] ' + escapeXml(t.title) + ' (' + escapeXml(t.id) + ' · ' + escapeXml(t.jurisdiction || 'US') + ')</w:t></w:r></w:p>';
+        '<w:r><w:rPr><w:b/><w:color w:val="21594F"/></w:rPr><w:t>[T' + (i + 1) + ' Patented Core] ' + escapeXml(t.title) + ' (' + escapeXml(t.id) + ' · ' + escapeXml(t.jurisdiction || 'US') + ')</w:t></w:r></w:p>';
       docBody += '<w:p><w:pPr><w:spacing w:before="0" w:after="60"/><w:jc w:val="both"/></w:pPr><w:r><w:t>' + escapeXml(t.description) + '</w:t></w:r></w:p>';
       docBody += '<w:p><w:pPr><w:spacing w:before="0" w:after="120"/></w:pPr><w:r><w:rPr><w:i/><w:sz w:val="18"/><w:color w:val="4B5563"/></w:rPr><w:t>Source: ' + escapeXml(t.url) + ' | Legal/Access Status: ' + escapeXml(t.statusLabel || t.access || 'Requires review') + ' | ' + escapeXml(costLabel(t)) + '</w:t></w:r></w:p>';
+    }
+    if (bp.gaps.length) {
+      docBody += '<w:p><w:pPr><w:spacing w:before="100" w:after="40"/></w:pPr><w:r><w:rPr><w:b/><w:color w:val="163D36"/></w:rPr><w:t>AI-Engineered Auxiliary Subsystems (Filling Architectural Gaps with COTS Hardware)</w:t></w:r></w:p>';
+      for (const g of bp.gaps) {
+        docBody += '<w:p><w:pPr><w:spacing w:before="40" w:after="20"/></w:pPr>' +
+          '<w:r><w:rPr><w:b/></w:rPr><w:t>• ' + escapeXml(g.subsystem) + ': </w:t></w:r><w:r><w:t>' + escapeXml(g.role) + '</w:t></w:r></w:p>' +
+          '<w:p><w:pPr><w:spacing w:before="0" w:after="60"/><w:ind w:left="360"/></w:pPr><w:r><w:rPr><w:i/><w:color w:val="4B5563"/></w:rPr><w:t>COTS BOM: ' + escapeXml(g.cotsComponents) + ' | Interface: ' + escapeXml(g.interface) + '</w:t></w:r></w:p>';
+      }
     }
   }
 
@@ -270,7 +279,7 @@ p { margin-bottom: 8pt; text-align: justify; }
 </div>
 
 ${patents.length ? `
-<h2>Multi-Patent Technology Architecture (${patents.length} Sourced Leads)</h2>
+<h2>Technology &amp; Comprehensive Solution Blueprint (${patents.length} Sourced Leads, ${generateSolutionBlueprint(project).gaps.length} AI Gap-Fills)</h2>
 <table class='data-table'>
   <thead>
     <tr>
@@ -284,13 +293,37 @@ ${patents.length ? `
     ${patents.map((t, i) => `
       <tr>
         <td><strong>[T${i + 1}] ${escapeHtml(t.id)}</strong><br><small class='source-note'>${escapeHtml(t.source || 'Patent source')}</small></td>
-        <td><strong>${escapeHtml(t.title)}</strong><br><small>${escapeHtml(t.category || 'General mechanism')}</small></td>
+        <td><strong>${escapeHtml(t.title)}</strong><br><small>${escapeHtml(t.category || t.subsystem || 'Core mechanism')}</small></td>
         <td>${escapeHtml(t.jurisdiction || 'US')}<br><span class='badge'>${escapeHtml(t.statusLabel || t.access || 'Requires register review')}</span></td>
         <td>${escapeHtml(costLabel(t))}<br><small><a href='${escapeHtml(t.url)}'>Source link ↗</a></small></td>
       </tr>
     `).join('')}
   </tbody>
 </table>
+
+${generateSolutionBlueprint(project).gaps.length ? `
+<h3>AI-Engineered Auxiliary Subsystems (Filling Architectural Gaps with COTS Hardware)</h3>
+<table class='data-table'>
+  <thead>
+    <tr>
+      <th style='width:25%;'>Subsystem</th>
+      <th style='width:35%;'>Engineering Role &amp; Function</th>
+      <th style='width:25%;'>Commercial Off-The-Shelf (COTS) BOM</th>
+      <th style='width:15%;'>Interface</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${generateSolutionBlueprint(project).gaps.map(g => `
+      <tr>
+        <td><strong>${escapeHtml(g.subsystem)}</strong><br><span class='badge' style='background:#e8f5e9;color:#1b5e20;'>COTS Gap-Fill</span></td>
+        <td>${escapeHtml(g.role)}</td>
+        <td><small>${escapeHtml(g.cotsComponents)}</small></td>
+        <td><small>${escapeHtml(g.interface)}</small></td>
+      </tr>
+    `).join('')}
+  </tbody>
+</table>
+` : ''}
 ` : ''}
 
 ${project.financial && project.financial.price ? `
@@ -362,9 +395,15 @@ export function pitchDeckSlides(project) {
     },
     {
       num: 4,
-      title: 'Technology & Multi-Patent Architecture',
-      subtitle: 'Grounded in Real Intellectual Property',
-      content: patents.length ? patents.map((t, i) => `<strong>[T${i + 1}] ${t.title}</strong> (${t.id})<br>Role: ${t.category || 'Core Subsystem'} · Status: ${t.statusLabel || t.access || 'Active'}<br>`).join('<br>') : 'Proprietary engineering architecture combined with open industry standards.'
+      title: 'Technology & Solution Blueprint',
+      subtitle: 'Patented Core + AI-Engineered Modular Architecture',
+      content: patents.length ? (
+        patents.map((t, i) => `<strong>[T${i + 1} Patented Core] ${t.title}</strong> (${t.id})<br>Role: ${t.subsystem || t.category || 'Core Subsystem'} · Status: ${t.statusLabel || t.access || 'Active'}`).join('<br>') +
+        '<br><br><strong>AI-Engineered Subsystems (COTS Off-The-Shelf):</strong><br>' +
+        '• Power & Energy Conditioning (Solar MPPT / LiFePO4 battery buffer)<br>' +
+        '• Sensing, Control & Telemetry (Embedded MCU closed-loop controller)<br>' +
+        '• Structural Housing & Ingress Protection (Weatherproof IP65 modular chassis)'
+      ) : 'Proprietary engineering architecture combined with open industry standards.'
     },
     {
       num: 5,

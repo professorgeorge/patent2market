@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {newProject,validateProject,currencyForCountry,heuristicFinancials,heuristicEvidence,financialInputsComplete,draftPlan,exportPlan} from '../dist/venture-core.js';
+import {newProject,validateProject,currencyForCountry,heuristicFinancials,heuristicEvidence,financialInputsComplete,draftPlan,exportPlan,generateSolutionBlueprint} from '../dist/venture-core.js';
 import {parseAI,messages} from '../dist/prompts.js';
 import {googleRecord,handlePatents} from '../server/patents.mjs';
 
@@ -94,4 +94,34 @@ test('end-to-end venture plan integration with calibrated financials and evidenc
  assert.match(exported,/KES/);
  assert.match(exported,/Modular solar refrigeration unit/);
  assert.match(exported,/Regulatory compliance/);
+});
+
+test('generateSolutionBlueprint identifies architectural gaps and fills with native engineering COTS specs',()=>{
+ const p=newProject();
+ p.problem='Solar water purification in rural communities';
+ p.offer='Clean drinking water kiosks';
+ p.sector='Water & Sanitation';
+ p.technology=googleRecord({
+  publication_number:'US9876543B2',
+  title:'Solar Desalination Chamber',
+  snippet:'Membrane distillation apparatus',
+  family_metadata:{aggregated:{country_status:[{country_code:'US',best_patent_stage:{state:'ACTIVE'}}]}}
+ });
+ p.technologies=[p.technology];
+
+ const bp=generateSolutionBlueprint(p);
+ assert.equal(bp.nodes.length,1);
+ assert.equal(bp.nodes[0].id,'T1');
+ assert.ok(bp.gaps.length>=3);
+ assert.ok(bp.gaps.some(g=>g.subsystem.includes('Sensing')||g.id==='G-CTL'));
+ assert.ok(bp.gaps.some(g=>g.subsystem.includes('Housing')||g.id==='G-HSG'));
+ assert.ok(bp.gaps.every(g=>g.cotsComponents&&g.interface));
+ assert.ok(bp.complementaryQueries.length>=2);
+
+ const sections=draftPlan(p);
+ assert.match(sections[2].text,/Comprehensive Product & Solution Blueprint/);
+ assert.match(sections[2].text,/AI-Engineered Subsystem Integration/);
+ assert.match(sections[3].text,/Modular Technology Stack & Bill of Materials/);
+ assert.match(sections[3].text,/COTS off-the-shelf/);
+ assert.match(sections[7].text,/Supply Chain & Assembly Architecture/);
 });
