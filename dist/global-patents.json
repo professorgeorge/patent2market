@@ -1,0 +1,43 @@
+{
+  "scope": "Two illustrative international reference records, not a worldwide index. CN description reviewed; complete claims availability not confirmed.",
+  "records": [
+    {
+      "id": "JP3731093B2",
+      "title": "Water purification method",
+      "description": "Describes electrical pretreatment and electrolysis of water followed by activated-carbon treatment. A shaped flow channel aims to reduce uneven passage through carbon. Suitability and water-quality performance require independent testing.",
+      "jurisdiction": "JP",
+      "category": "Water",
+      "url": "https://patents.google.com/patent/JP3731093B2/en",
+      "source": "Google Patents reference record",
+      "retrievedAt": "2026-11-14",
+      "fullTextAvailable": true,
+      "fullTextURL": "https://patents.google.com/patent/JP3731093B2/en",
+      "fullTextEvidence": "Description and claims accessible on the linked page; English machine translation requires checking.",
+      "access": "expired",
+      "accessEvidence": "Google Patents reports Expired - Fee Related. This is a secondary-source assumption, not official register verification. Check family members and any restoration of rights.",
+      "accessURL": "https://patents.google.com/patent/JP3731093B2/en",
+      "checkedAt": "2026-11-14",
+      "basisOrigin": "source-reported",
+      "statusLabel": "Expired - Fee Related"
+    },
+    {
+      "id": "CN201653084U",
+      "title": "Heat pump assisted solar heat storage drying equipment",
+      "description": "Combines solar heat collection, heat storage, a heat pump and a drying chamber. Heat recovery and dehumidification could inform produce-drying experiments when sunlight varies.",
+      "jurisdiction": "CN",
+      "category": "Food and energy",
+      "url": "https://patents.google.com/patent/CN201653084U/en",
+      "source": "Google Patents reference record",
+      "retrievedAt": "2026-11-14",
+      "fullTextAvailable": false,
+      "fullTextURL": "https://patents.google.com/patent/CN201653084U/en",
+      "fullTextEvidence": "",
+      "access": "expired",
+      "accessEvidence": "Google Patents reports Expired - Lifetime. This is a secondary-source assumption, not official register verification. Check family members and any restoration of rights.",
+      "accessURL": "https://patents.google.com/patent/CN201653084U/en",
+      "checkedAt": "2026-11-14",
+      "basisOrigin": "source-reported",
+      "statusLabel": "Expired - Lifetime"
+    }
+  ]
+}

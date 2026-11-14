@@ -1,6 +1,6 @@
 # Patent2Market — Venture Studio
 
-An install-optional PWA that takes a founder from a problem to an editable business-planning draft. Version 0.2 shifts the product toward practical venture development, with optional AI assistance throughout.
+An install-optional PWA that takes a founder from a problem to an editable business-planning draft. Version 0.3 shifts the product toward practical venture development, with optional AI assistance throughout.
 
 ## Run and deploy
 
@@ -20,7 +20,7 @@ The current hosted preview is owner-private. Keep cloud AI endpoints behind auth
 ## The user journey
 
 1. Describe a problem, paying customer, place, constraints, and founder advantages.
-2. Search a 402-record NASA snapshot, choose a technology, or add a patent/open design from elsewhere.
+2. Search across jurisdictions using an optional Lens connector, a small international reference set, NASA summaries, or imported documents. Filter by full-document availability and documented expired/open-license status; select up to six ingredients.
 3. Develop a concrete offer; optionally ask AI for three contrasting concepts and a simpler alternative.
 4. Record dated source evidence, customer observations, costs, and competitive alternatives.
 5. Adjust unit economics and inspect 12-month downside/base/upside scenarios.
@@ -53,7 +53,7 @@ OpenAI/Gemini are optional proprietary services. The application is open-source;
 
 Opportunity clarification, technical explanation, business-concept alternatives, evidence collection planning, skeptical review, and comprehensive plan writing. Prompts treat retrieved descriptions and notes as untrusted input. Outputs are escaped before display. Incomplete plan responses do not replace existing work. Users can cancel requests; cloud calls have bounded timeouts. Cancellation does not guarantee that the provider stops billing work already started.
 
-This release does **not** perform live web research. The evidence assistant proposes questions and tests; users add actual source material. Patent discovery uses the dated snapshot plus external search links and manual imports. The application does **not** yet automatically verify expiration, patent families, jurisdiction-specific rights, or licensing conditions. A user-documented access basis is never represented as independent legal clearance.
+This release does **not** perform general market web research. The evidence assistant proposes questions and tests; users add actual source material. Patent discovery supports optional live Lens search, a dated reference collection, external worldwide search links, and manual imports. The application does **not** yet automatically verify expiration, patent families, jurisdiction-specific rights, or licensing conditions. A user-documented access basis is never represented as independent legal clearance.
 
 ## Financial model
 
@@ -70,7 +70,7 @@ Price and variable cost per unit, month-one volume, monthly volume growth, month
 - `scripts/build-worker.mjs`: dependency-free deployment bundling.
 - `test/`: retrieval, corpus integrity, calculations, imports, source URLs, AI protocols and gateway tests.
 
-Manual browser verification covered a problem-to-plan journey, technology selection, evidence entry, scenario recalculation, plan editing, persistence after reload, unavailable-provider messaging, and offline access with the local server stopped. Paid cloud inference and actual browser-model inference remain unverified. Local Ollama opportunity clarification and complete 14-section plan generation were verified.
+Version 0.2 manual browser verification covered a problem-to-plan journey, technology selection, evidence entry, scenario recalculation, plan editing, persistence after reload, unavailable-provider messaging, and offline access with the local server stopped. Paid cloud inference and actual browser-model inference remain unverified. Local Ollama opportunity clarification and complete 14-section plan generation were verified.
 
 ## Offline and privacy
 
@@ -83,3 +83,15 @@ Original code is MIT licensed. No third-party runtime packages, fonts, or stock 
 ## Credits
 
 Conceptualization and development: [Professor Babu George](https://www.linkedin.com/in/beingbabu/).
+
+## Worldwide discovery and semi-autopilot (0.3)
+
+Set `LENS_API_TOKEN` server-side to enable `POST /api/patents`. Obtain approved API access from Lens and comply with its account and redistribution terms; this optional service is not bundled open-source software or guaranteed free. The connector requests the first 30 matches without a US/NASA restriction. It marks a full document available only when the provider actually returns description and claims. Calculated expiry is source-reported; lapsed, discontinued, active and unknown statuses are not promoted to expired. Family rights, drawings, translations, legal status and licensing prices still need review. No Lens credential is included, so worldwide live search is disabled in the hosted preview until configured. The connector has mocked protocol tests, not a live-account test.
+
+The offline reference set has two illustrative CN/JP records, not a worldwide index. Only the JP record currently has confirmed linked description and claims; the CN record is hidden by the default full-document filter until its complete text is reviewed. The NASA collection remains optional under broader filters. Source links require internet; offline metadata is not a downloaded patent library. Import documents from any jurisdiction and record full-text evidence, relevant excerpts, rights sources and dated published cost terms. No price has been established for the reference records; none is represented as free. Fees are not automatically inserted into financial assumptions.
+
+**Propose a solution for me** clarifies technical search terms, retrieves under the current filters, and asks the connected model to choose zero to six supplied patents. Each component needs a role, integration risk, and an exact supporting passage from that candidate’s supplied text. This checks provenance, not engineering validity. The proposal includes additional inputs, a first experiment, a simpler alternative and founder questions. Candidate IDs are validated in code. Accepting explicitly replaces selected ingredients and the solution concept; it does not validate rights, buy licenses or manufacture evidence. Changed inputs invalidate an in-flight proposal. The assistant receives only the supplied summaries/excerpts, not every page behind a link.
+
+Version 0.3 validation: 39 automated tests plus Worker asset/gateway smoke checks. The updated UI has not had a fresh visual browser pass because the computer-use session reached its usage limit. Existing 0.2 browser checks do not establish visual verification of these new controls.
+
+The new synthesis task was exercised with local `qwen3.5:4b`. An initial irrelevant selection motivated exact supporting-passage validation. With that validation the rerun chose no patent and offered a simpler experiment. This is a functional smoke check, not a benchmark of solution quality.
