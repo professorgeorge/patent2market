@@ -1,10 +1,24 @@
 // Evidence fields describe a document and territory, never worldwide clearance.
 export function normalizePatent(t){
  if(!t||typeof t!=='object'||typeof t.title!=='string')return null;
- const out={};for(const k of ['id','title','description','url','category','retrievedAt','access','accessEvidence','accessURL','jurisdiction','checkedAt','fullTextURL','fullTextEvidence','claimsExcerpt','costTerms','costURL','costCheckedAt','statusLabel','source'])out[k]=typeof t[k]==='string'?t[k].slice(0,k==='claimsExcerpt'?6000:15000):'';
- for(const k of ['url','accessURL','fullTextURL','costURL']){try{const u=new URL(out[k]);out[k]=['http:','https:'].includes(u.protocol)&&!u.username&&!u.password?u.href:'';}catch{out[k]='';}}
+ const out={};for(const k of ['id','title','description','url','category','retrievedAt','access','accessEvidence','accessURL','jurisdiction','checkedAt','fullTextURL','fullTextEvidence','claimsExcerpt','costTerms','costURL','costCheckedAt','statusLabel','source','imageUrl','subsystem'])out[k]=typeof t[k]==='string'?t[k].slice(0,k==='claimsExcerpt'?6000:15000):'';
+ for(const k of ['url','accessURL','fullTextURL','costURL','imageUrl']){try{const u=new URL(out[k]);out[k]=['http:','https:'].includes(u.protocol)&&!u.username&&!u.password?u.href:'';}catch{out[k]='';}}
  out.id=out.id||out.url||out.title;out.fullTextAvailable=t.fullTextAvailable===true&&!!out.fullTextURL&&!!out.fullTextEvidence;
- out.basisOrigin=t.basisOrigin==='source-reported'?'source-reported':'user-recorded';return out;
+ out.basisOrigin=t.basisOrigin==='source-reported'?'source-reported':'user-recorded';
+ if(!out.subsystem)out.subsystem=classifySubsystem(out);
+ return out;
+}
+export function classifySubsystem(patent){
+ if(!patent)return 'Core Mechanism';
+ if(patent.subsystem&&patent.subsystem!=='Core Mechanism')return patent.subsystem;
+ const text=((patent.title||'')+' '+(patent.description||'')+' '+(patent.category||'')).toLowerCase();
+ if(/(cool|thermal|heat|refrigerat|cryo|evaporat|cold|ice|insulat)/i.test(text))return 'Thermal & Cooling';
+ if(/(solar|power|battery|energy|stirling|photovoltaic|electric|fuel)/i.test(text))return 'Power & Energy';
+ if(/(sensor|detect|monitor|optic|measure|diagnos|camera|spectr|track|gas)/i.test(text))return 'Sensing & Control';
+ if(/(water|filtr|purif|membrane|desalin|fluid|pump|valve|waste)/i.test(text))return 'Fluid & Purification';
+ if(/(packag|contain|barrier|material|coat|polymer|aerogel|structur)/i.test(text))return 'Materials & Packaging';
+ if(/(software|algorithm|model|data|ai|network|communicat)/i.test(text))return 'Software & Digital';
+ return 'Core Mechanism';
 }
 export function selectedPatents(p){return p.technologies?.length?p.technologies:p.technology?[p.technology]:[];}
 export function documentedAccess(t){return ['expired','open-license'].includes(t.access)&&!!t.accessURL&&!!t.accessEvidence?.trim()&&!!t.jurisdiction?.trim()&&/^\d{4}-\d{2}-\d{2}$/.test(t.checkedAt||'');}

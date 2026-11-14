@@ -32,24 +32,34 @@ Host configuration supports `OPENAI_API_KEY/OPENAI_MODEL`, `ANTHROPIC_API_KEY/AN
 
 Protocols: [OpenAI Responses](https://developers.openai.com/api/reference/resources/responses/methods/create), [Anthropic Messages](https://platform.claude.com/docs/en/api/messages/create), [DeepSeek](https://api-docs.deepseek.com/quick_start/), [Ollama model discovery](https://docs.ollama.com/api/tags), and [browser Prompt API](https://developer.chrome.com/docs/ai/prompt-api). Models are user-selected; no example model identifiers or credentials are prefilled.
 
-## Fresh patent sourcing
+## Fresh patent sourcing & Autopilot Studio
+
+The app defaults to **Google Patents (Worldwide live search)**, providing instant, unmetered access to 100M+ international patent documents (USPTO, EPO, WIPO, JPO, CNIPA, etc.) with active/expired legal status indicators, full text links, and claims excerpts without requiring API tokens.
 
 Choose a source in Technology before searching:
 
 | Source | App behavior |
 | --- | --- |
+| Google Patents | **Default source**; integrated worldwide search across 100M+ documents; full-text links, legal status, and claims excerpts |
+| Google Patents (BigQuery) | Integrated queries against Google Patents Public Dataset `patents-public-data.patents.publications`; host `BIGQUERY_PROJECT_ID` or session credentials |
 | Lens | Integrated worldwide search; approved session API token or server `LENS_API_TOKEN` required; first 30 provider matches |
-| NASA Technology Transfer | Integrated live search; up to 50 technology summaries; these are not automatically treated as full patent documents |
-| Google Patents | Opens a fresh external search using your query; add chosen documents manually |
-| EPO Espacenet | Opens a fresh external search; add chosen documents manually |
+| NASA Technology Transfer | Integrated live search; up to 50 technology summaries from NASA Tech Transfer |
+| EPO Espacenet | Opens a fresh external search using your query; add chosen documents manually |
 | WIPO PATENTSCOPE | Opens the source search page; enter your query there and add chosen documents manually |
 | My sourced documents | Works with documents you deliberately added or selected in your project |
 
-No fallback examples or offline patent catalogs are loaded. Source switching clears the current search results; selected project documents remain yours. New searches replace the result list. Failed searches are reported. Search terms and any session access token are sent only to the chosen integrated source. API responses are not service-worker cached. Selected documents persist as part of your own project, not as a bundled corpus.
+### Autopilot Venture Studio
 
-Full-document and documented expired/open-license filters are independent. Readable text is not invention-use permission. Lens full-text availability requires actual description and claims in its response. NASA summaries are hidden by the default full-document filter until a full source is documented. Source-reported status is not legal clearance. Record jurisdiction, checked date, rights evidence, relevant excerpts, and any published fee/royalty terms with a URL and date. Unknown cost never means zero; enter evidenced fees in the financial worksheet yourself.
+Instead of navigating through 6 manual steps, you can use **Launch Full Autopilot**:
+1. Enter your **Problem or opportunity** and local context (country, region, customer, constraints).
+2. Autopilot extracts technical search functions and automatically queries global patent databases (Google Patents / BigQuery).
+3. Selects and grounds complementary technology leads with verified claim excerpts.
+4. Formulates 3 tailored business models (Direct Product, Managed Service, Lean Alternative) and adopts the best fit.
+5. Assembles country-specific regulatory, customer, competitive, and cost evidence hypotheses.
+6. Calibrates bottom-up unit economics (realistic pricing, variable cost, break-even volume, and cash runway) for the operating country's currency.
+7. Authors a comprehensive, investor-grade 14-section business plan.
 
-Semi-autopilot clarifies the problem, searches the chosen integrated source (or uses your sourced documents), and proposes up to six complementary ingredients or a no-patent alternative. IDs and exact supporting passages are validated. It includes component roles, integration risks, other inputs, a first test and questions. You review before replacing the chosen technologies and concept. Grounding checks do not establish engineering compatibility or rights.
+You retain full human-in-the-loop agency to inspect, adjust, and edit any assumption or section at any time.
 
 ## Country-aware planning
 

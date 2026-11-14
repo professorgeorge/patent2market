@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {normalizePatent,filterPatents,selectedPatents,costLabel,validateSynthesis} from '../dist/patents.js';
 import {validateProject,draftPlan,newProject,context} from '../dist/venture-core.js';
-import {lensRecord,handlePatents} from '../server/patents.mjs';
+import {lensRecord,googleRecord,bigqueryRecord,handlePatents} from '../server/patents.mjs';
 const patent={id:'JP123B2',title:'Test mechanism',description:'An illustrative mechanism',jurisdiction:'JP',url:'https://example.org/patent',access:'expired',accessEvidence:'Status evidence for this territory only',accessURL:'https://example.org/status',checkedAt:'2026-11-14',fullTextAvailable:true,fullTextURL:'https://example.org/full',fullTextEvidence:'Description and claims reviewed'};
 test('full text and documented access filters are independent and country neutral',()=>{const records=[normalizePatent(patent),normalizePatent({...patent,id:'CN1',jurisdiction:'CN',access:'unknown'}),normalizePatent({...patent,id:'US1',fullTextAvailable:false})];assert.equal(filterPatents(records).length,2);assert.equal(filterPatents(records,{openOnly:true}).length,1);assert.equal(filterPatents(records,{fullText:false,openOnly:true}).length,2);assert.equal(filterPatents(records,{jurisdiction:'CN'})[0].id,'CN1');});
 test('incomplete evidence and unsafe full-text links cannot qualify',()=>{const t=normalizePatent({...patent,accessURL:'javascript:alert(1)',fullTextURL:'javascript:alert(1)'});assert.equal(t.fullTextAvailable,false);assert.equal(filterPatents([t],{fullText:false,openOnly:true}).length,0);});
@@ -15,3 +15,54 @@ test('worldwide endpoint does not expose tokens or silently pretend search is co
 test('worldwide gateway uses fixed host, bounded results and same-origin protection',async()=>{const req=()=>new Request('https://app.test/api/patents',{method:'POST',headers:{Origin:'https://app.test'},body:JSON.stringify({query:'water filter'})});let called=false;const response=await handlePatents(req(),{LENS_API_TOKEN:'secret'},async(url,options)=>{called=true;assert.equal(url,'https://api.lens.org/patent/search');assert.equal(JSON.parse(options.body).size,30);assert.equal(options.headers.Authorization,'Bearer secret');return Response.json({data:[{lens_id:'1',jurisdiction:'CN',doc_number:'123',kind:'B'}]});});assert.equal(response.status,200);assert.equal(called,true);assert.equal((await response.json()).records[0].jurisdiction,'CN');assert.equal((await handlePatents(new Request('https://app.test/api/patents',{method:'POST'}),{LENS_API_TOKEN:'secret'})).status,403);});
 
 test('synthesis rejects evidence attributed to the wrong patent',()=>assert.throws(()=>validateSynthesis({...proposal,components:[{...proposal.components[0],evidenceQuote:'A solar drying invention'}]},[patent]),/ground/));
+
+test('googleRecord maps Google Patents search result with full text and status',()=>{
+ const raw={publication_number:'WO2019023649A1',title:'<b>Water</b> purification system',snippet:'A modular <b>filter</b> cartridge for unpurified water.',family_metadata:{aggregated:{country_status:[{country_code:'WO',best_patent_stage:{state:'NOT_ACTIVE'}}]}}};
+ const rec=googleRecord(raw);
+ assert.equal(rec.id,'WO2019023649A1');
+ assert.equal(rec.title,'Water purification system');
+ assert.equal(rec.jurisdiction,'WO');
+ assert.equal(rec.fullTextAvailable,true);
+ assert.equal(rec.access,'expired');
+ assert.match(rec.url,/patents\.google\.com/);
+ assert.match(rec.fullTextEvidence,/Google Patents/);
+});
+
+test('bigqueryRecord maps BigQuery public dataset row into normalized patent',()=>{
+ const row={publication_number:'US10987654B2',title:'Solar water desalinator',abstract:'A solar thermal distillation apparatus.',country_code:'US',publication_date:'20240115'};
+ const rec=bigqueryRecord(row);
+ assert.equal(rec.id,'US10987654B2');
+ assert.equal(rec.jurisdiction,'US');
+ assert.equal(rec.fullTextAvailable,true);
+ assert.match(rec.source,/BigQuery/);
+});
+
+test('Google Patents live search gateway processes search queries',async()=>{
+ const req=new Request('https://app.test/api/patents',{method:'POST',headers:{Origin:'https://app.test'},body:JSON.stringify({query:'solar desalination',source:'google'})});
+ let fetchedUrl='';
+ const mockFetcher=async(url)=>{fetchedUrl=url;return Response.json({results:{cluster:[{result:[{patent:{publication_number:'US9876543B2',title:'Solar still',snippet:'Distillation device',family_metadata:{aggregated:{country_status:[{country_code:'US',best_patent_stage:{state:'ACTIVE'}}]}}}}]}]}});};
+ const res=await handlePatents(req,{},mockFetcher);
+ assert.equal(res.status,200);
+ assert.match(fetchedUrl,/patents\.google\.com\/xhr\/query/);
+ const body=await res.json();
+ assert.equal(body.records.length,1);
+ assert.equal(body.records[0].id,'US9876543B2');
+ assert.equal(body.records[0].fullTextAvailable,true);
+});
+
+test('BigQuery gateway checks project configuration and parses query response',async()=>{
+ const unconfReq=new Request('https://app.test/api/patents',{method:'POST',headers:{Origin:'https://app.test'},body:JSON.stringify({query:'water filter',source:'bigquery'})});
+ assert.equal((await handlePatents(unconfReq,{})).status,503);
+ const confReq=new Request('https://app.test/api/patents',{method:'POST',headers:{Origin:'https://app.test'},body:JSON.stringify({query:'water filter',source:'bigquery',projectId:'my-gcp-project',apiKey:'bq-key'})});
+ const mockFetcher=async(url,options)=>{
+  assert.match(url,/bigquery\.googleapis\.com/);
+  assert.match(options.body,/patents-public-data\.patents\.publications/);
+  return Response.json({schema:{fields:[{name:'publication_number'},{name:'country_code'},{name:'title'},{name:'abstract'},{name:'publication_date'}]},rows:[{f:[{v:'US8765432B1'},{v:'US'},{v:'Filtration method'},{v:'Desiccant and membrane'},{v:'20230501'}]}]});
+ };
+ const res=await handlePatents(confReq,{},mockFetcher);
+ assert.equal(res.status,200);
+ const data=await res.json();
+ assert.equal(data.records[0].id,'US8765432B1');
+ assert.equal(data.records[0].title,'Filtration method');
+});
+

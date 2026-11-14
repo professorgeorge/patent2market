@@ -1,0 +1,406 @@
+// word-export.js — Microsoft Word (.docx and .doc) and Pitch Deck export engine for Patent2Market
+// Zero external runtime dependencies; pure ES module with standard OpenXML and PKZip specification.
+
+import { financials } from './venture-core.js';
+import { selectedPatents, costLabel } from './patents.js';
+
+// CRC-32 Lookup Table
+const crcTable = new Uint32Array(256);
+for (let i = 0; i < 256; i++) {
+  let c = i;
+  for (let j = 0; j < 8; j++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+  crcTable[i] = c;
+}
+
+function crc32(buf) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < buf.length; i++) c = crcTable[(c ^ buf[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+export function createZip(files) {
+  const enc = new TextEncoder();
+  const fileEntries = files.map(f => {
+    const data = typeof f.content === 'string' ? enc.encode(f.content) : f.content;
+    const nameBytes = enc.encode(f.name);
+    return { nameBytes, data, crc: crc32(data), size: data.length };
+  });
+
+  const parts = [];
+  let offset = 0;
+  const cdirParts = [];
+
+  for (const f of fileEntries) {
+    const lh = new Uint8Array(30 + f.nameBytes.length);
+    const view = new DataView(lh.buffer);
+    view.setUint32(0, 0x04034b50, true);
+    view.setUint16(4, 20, true);
+    view.setUint16(6, 0, true);
+    view.setUint16(8, 0, true);
+    view.setUint16(10, 0, true);
+    view.setUint16(12, 0, true);
+    view.setUint32(14, f.crc, true);
+    view.setUint32(18, f.size, true);
+    view.setUint32(22, f.size, true);
+    view.setUint16(26, f.nameBytes.length, true);
+    view.setUint16(28, 0, true);
+    lh.set(f.nameBytes, 30);
+    parts.push(lh, f.data);
+
+    const cdh = new Uint8Array(46 + f.nameBytes.length);
+    const cdView = new DataView(cdh.buffer);
+    cdView.setUint32(0, 0x02014b50, true);
+    cdView.setUint16(4, 20, true);
+    cdView.setUint16(6, 20, true);
+    cdView.setUint16(8, 0, true);
+    cdView.setUint16(10, 0, true);
+    cdView.setUint16(12, 0, true);
+    cdView.setUint32(16, f.crc, true);
+    cdView.setUint32(20, f.size, true);
+    cdView.setUint32(24, f.size, true);
+    cdView.setUint16(28, f.nameBytes.length, true);
+    cdView.setUint16(30, 0, true);
+    cdView.setUint16(32, 0, true);
+    cdView.setUint16(34, 0, true);
+    cdView.setUint16(36, 0, true);
+    cdView.setUint32(38, 0, true);
+    cdView.setUint32(42, offset, true);
+    cdh.set(f.nameBytes, 46);
+    cdirParts.push(cdh);
+    offset += lh.length + f.data.length;
+  }
+
+  const cdirOffset = offset;
+  let cdirSize = 0;
+  for (const c of cdirParts) cdirSize += c.length;
+
+  const eocd = new Uint8Array(22);
+  const eView = new DataView(eocd.buffer);
+  eView.setUint32(0, 0x06054b50, true);
+  eView.setUint16(4, 0, true);
+  eView.setUint16(6, 0, true);
+  eView.setUint16(8, fileEntries.length, true);
+  eView.setUint16(10, fileEntries.length, true);
+  eView.setUint32(12, cdirSize, true);
+  eView.setUint32(16, cdirOffset, true);
+  eView.setUint16(20, 0, true);
+
+  const totalLen = offset + cdirSize + 22;
+  const out = new Uint8Array(totalLen);
+  let pos = 0;
+  for (const p of parts) { out.set(p, pos); pos += p.length; }
+  for (const c of cdirParts) { out.set(c, pos); pos += c.length; }
+  out.set(eocd, pos);
+  return out;
+}
+
+function escapeXml(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+function escapeHtml(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// Builds an authentic Office OpenXML .docx file (ZIP container)
+export function buildDocx(project) {
+  const f = financials(project.financial);
+  const curr = project.financial.currency || 'USD';
+  const money = n => `${curr} ${Math.round(n).toLocaleString('en-US')}`;
+  const patents = selectedPatents(project);
+
+  const contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n' +
+    '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+    '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+    '<Default Extension="xml" ContentType="application/xml"/>' +
+    '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+    '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>' +
+    '</Types>';
+
+  const rels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n' +
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+    '</Relationships>';
+
+  const docRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n' +
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
+    '</Relationships>';
+
+  const styles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n' +
+    '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+    '<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/><w:sz w:val="22"/><w:color w:val="1F2937"/></w:rPr></w:rPrDefault></w:docDefaults>' +
+    '<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:pPr><w:spacing w:before="360" w:after="140"/><w:keepNext/></w:pPr><w:rPr><w:rFonts w:ascii="Georgia" w:hAnsi="Georgia"/><w:b/><w:sz w:val="30"/><w:color w:val="163D36"/></w:rPr></w:style>' +
+    '<w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:pPr><w:spacing w:before="240" w:after="100"/><w:keepNext/></w:pPr><w:rPr><w:rFonts w:ascii="Georgia" w:hAnsi="Georgia"/><w:b/><w:sz w:val="24"/><w:color w:val="21594F"/></w:rPr></w:style>' +
+    '</w:styles>';
+
+  let docBody = '';
+
+  // Title Block
+  docBody += '<w:p><w:pPr><w:spacing w:before="120" w:after="80"/><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Georgia" w:hAnsi="Georgia"/><w:b/><w:sz w:val="48"/><w:color w:val="163D36"/></w:rPr><w:t>' + escapeXml(project.name || 'Patent2Market Venture Plan') + '</w:t></w:r></w:p>';
+  docBody += '<w:p><w:pPr><w:spacing w:before="0" w:after="200"/><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:sz w:val="24"/><w:color w:val="4B5563"/></w:rPr><w:t>COMMERCIAL VENTURE PLAN &amp; PATENT INTEGRATION BLUEPRINT</w:t></w:r></w:p>';
+
+  // Attribution
+  docBody += '<w:p><w:pPr><w:spacing w:before="0" w:after="240"/><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:i/><w:sz w:val="18"/><w:color w:val="6B7280"/></w:rPr><w:t>Conceptualization and development: Professor Babu George (LinkedIn: https://www.linkedin.com/in/beingbabu/)</w:t></w:r></w:p>';
+
+  // Metadata Paragraph
+  docBody += '<w:p><w:pPr><w:spacing w:before="100" w:after="140"/></w:pPr>' +
+    '<w:r><w:rPr><w:b/><w:color w:val="163D36"/></w:rPr><w:t>Operating Country: </w:t></w:r><w:r><w:t>' + escapeXml(project.country || 'Not specified') + '   |   </w:t></w:r>' +
+    '<w:r><w:rPr><w:b/><w:color w:val="163D36"/></w:rPr><w:t>Target Sector: </w:t></w:r><w:r><w:t>' + escapeXml(project.sector || 'Not specified') + '   |   </w:t></w:r>' +
+    '<w:r><w:rPr><w:b/><w:color w:val="163D36"/></w:rPr><w:t>Target Market: </w:t></w:r><w:r><w:t>' + escapeXml(project.geography || 'Not specified') + '</w:t></w:r></w:p>';
+
+  // Core Value Callout
+  docBody += '<w:p><w:pPr><w:spacing w:before="80" w:after="80"/><w:pBdr><w:left w:val="single" w:sz="24" w:space="12" w:color="163D36"/></w:pBdr></w:pPr>' +
+    '<w:r><w:rPr><w:b/><w:color w:val="163D36"/></w:rPr><w:t>Problem Statement: </w:t></w:r><w:r><w:t>' + escapeXml(project.problem || 'Not specified') + '</w:t></w:r></w:p>';
+  docBody += '<w:p><w:pPr><w:spacing w:before="80" w:after="160"/><w:pBdr><w:left w:val="single" w:sz="24" w:space="12" w:color="163D36"/></w:pBdr></w:pPr>' +
+    '<w:r><w:rPr><w:b/><w:color w:val="163D36"/></w:rPr><w:t>Customer Solution &amp; Offer: </w:t></w:r><w:r><w:t>' + escapeXml(project.offer || project.concept || 'Not specified') + '</w:t></w:r></w:p>';
+
+  // Multi-Patent Architecture Summary if present
+  if (patents.length) {
+    docBody += '<w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>Selected Technology &amp; Patent Stack (' + patents.length + ' leads)</w:t></w:r></w:p>';
+    for (let i = 0; i < patents.length; i++) {
+      const t = patents[i];
+      docBody += '<w:p><w:pPr><w:spacing w:before="60" w:after="40"/></w:pPr>' +
+        '<w:r><w:rPr><w:b/><w:color w:val="21594F"/></w:rPr><w:t>[T' + (i + 1) + '] ' + escapeXml(t.title) + ' (' + escapeXml(t.id) + ' · ' + escapeXml(t.jurisdiction || 'US') + ')</w:t></w:r></w:p>';
+      docBody += '<w:p><w:pPr><w:spacing w:before="0" w:after="60"/><w:jc w:val="both"/></w:pPr><w:r><w:t>' + escapeXml(t.description) + '</w:t></w:r></w:p>';
+      docBody += '<w:p><w:pPr><w:spacing w:before="0" w:after="120"/></w:pPr><w:r><w:rPr><w:i/><w:sz w:val="18"/><w:color w:val="4B5563"/></w:rPr><w:t>Source: ' + escapeXml(t.url) + ' | Legal/Access Status: ' + escapeXml(t.statusLabel || t.access || 'Requires review') + ' | ' + escapeXml(costLabel(t)) + '</w:t></w:r></w:p>';
+    }
+  }
+
+  // Financial Dashboard Summary
+  if (project.financial && project.financial.price) {
+    docBody += '<w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>Unit Economics &amp; 12-Month Outlook</w:t></w:r></w:p>';
+    docBody += '<w:p><w:pPr><w:spacing w:before="60" w:after="60"/></w:pPr>' +
+      '<w:r><w:rPr><w:b/></w:rPr><w:t>Unit Price: </w:t></w:r><w:r><w:t>' + money(project.financial.price) + '   |   </w:t></w:r>' +
+      '<w:r><w:rPr><w:b/></w:rPr><w:t>Unit Variable Cost: </w:t></w:r><w:r><w:t>' + money(project.financial.unitCost) + '   |   </w:t></w:r>' +
+      '<w:r><w:rPr><w:b/></w:rPr><w:t>Gross Margin: </w:t></w:r><w:r><w:t>' + (f.margin !== null ? Math.round(f.margin * 100) + '%' : 'N/A') + '   |   </w:t></w:r>' +
+      '<w:r><w:rPr><w:b/></w:rPr><w:t>Monthly Break-Even: </w:t></w:r><w:r><w:t>' + (f.breakEven !== null ? f.breakEven + ' units/mo' : 'N/A') + '</w:t></w:r></w:p>';
+    docBody += '<w:p><w:pPr><w:spacing w:before="40" w:after="160"/></w:pPr>' +
+      '<w:r><w:rPr><w:b/></w:rPr><w:t>Year 1 Revenue: </w:t></w:r><w:r><w:t>' + money(f.revenue) + '   |   </w:r>' +
+      '<w:r><w:rPr><w:b/></w:rPr><w:t>Operating Result: </w:t></w:r><w:r><w:t>' + money(f.profit) + '   |   </w:r>' +
+      '<w:r><w:rPr><w:b/></w:rPr><w:t>Launch Capital: </w:t></w:r><w:r><w:t>' + money(f.capital) + '   |   </w:r>' +
+      '<w:r><w:rPr><w:b/></w:rPr><w:t>Peak Funding Shortfall: </w:t></w:r><w:r><w:t>' + money(f.fundingGap) + '</w:t></w:r></w:p>';
+  }
+
+  // 14 Business Plan Sections
+  for (const s of project.sections) {
+    docBody += '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>' + escapeXml(s.title) + '</w:t></w:r></w:p>';
+    const paras = s.text.split(/\n\s*\n/);
+    for (const p of paras) {
+      if (!p.trim()) continue;
+      docBody += '<w:p><w:pPr><w:spacing w:before="60" w:after="120"/><w:jc w:val="both"/></w:pPr><w:r><w:t>' + escapeXml(p.trim()) + '</w:t></w:r></w:p>';
+    }
+  }
+
+  // Assembling document.xml
+  const documentXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n' +
+    '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+    '<w:body>' + docBody + '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr></w:body></w:document>';
+
+  const files = [
+    { name: '[Content_Types].xml', content: contentTypes },
+    { name: '_rels/.rels', content: rels },
+    { name: 'word/_rels/document.xml.rels', content: docRels },
+    { name: 'word/styles.xml', content: styles },
+    { name: 'word/document.xml', content: documentXml }
+  ];
+
+  return createZip(files);
+}
+
+// Builds an institutional Word HTML .doc format with full CSS styling and table layout
+export function generateWordHtml(project) {
+  const f = financials(project.financial);
+  const curr = project.financial.currency || 'USD';
+  const money = n => `${curr} ${Math.round(n).toLocaleString('en-US')}`;
+  const patents = selectedPatents(project);
+
+  return `
+<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+<head><meta charset='utf-8'><title>${escapeHtml(project.name || 'Patent2Market Venture Plan')}</title>
+<!--[if gte mso 9]>
+<xml>
+<w:WordDocument>
+<w:View>Print</w:View>
+<w:Zoom>100</w:Zoom>
+<w:DoNotOptimizeForBrowser/>
+</w:WordDocument>
+</xml>
+<![endif]-->
+<style>
+@page Section1 { size: 8.5in 11.0in; margin: 1.0in 1.0in 1.0in 1.0in; mso-header-margin: .5in; mso-footer-margin: .5in; }
+div.Section1 { page: Section1; font-family: 'Calibri', 'Segoe UI', Arial, sans-serif; font-size: 11pt; line-height: 1.5; color: #1e293b; }
+h1.doc-title { font-family: 'Georgia', serif; font-size: 26pt; color: #163d36; margin-bottom: 2pt; text-align: center; }
+.doc-subtitle { font-size: 11pt; text-transform: uppercase; letter-spacing: 1.5pt; color: #475569; margin-bottom: 12pt; text-align: center; font-weight: bold; }
+.attribution { font-size: 9.5pt; color: #64748b; font-style: italic; text-align: center; margin-bottom: 24pt; border-bottom: 1pt solid #cbd5e1; padding-bottom: 12pt; }
+h2 { font-family: 'Georgia', serif; font-size: 15pt; color: #163d36; border-bottom: 1.5pt solid #163d36; padding-bottom: 4pt; margin-top: 22pt; margin-bottom: 8pt; page-break-after: avoid; }
+h3 { font-size: 12pt; color: #21594f; margin-top: 14pt; margin-bottom: 4pt; }
+p { margin-bottom: 8pt; text-align: justify; }
+.callout { background-color: #f8fafc; border-left: 4pt solid #163d36; padding: 10pt 14pt; margin: 14pt 0; }
+.meta-table, .financial-table, .data-table { border-collapse: collapse; width: 100%; margin: 14pt 0; font-size: 10pt; }
+.meta-table td { border: none; padding: 4pt 8pt; }
+.financial-table th, .financial-table td, .data-table th, .data-table td { border: 1pt solid #cbd5e1; padding: 6pt 8pt; text-align: left; }
+.financial-table th, .data-table th { background-color: #f1f5f9; color: #163d36; font-weight: bold; }
+.num { text-align: right; }
+.badge { background: #e2e8f0; padding: 2pt 6pt; border-radius: 3pt; font-size: 9pt; }
+.source-note { font-size: 9pt; color: #64748b; margin-top: 3pt; }
+.footer-credit { margin-top: 36pt; padding-top: 12pt; border-top: 1pt solid #cbd5e1; font-size: 9pt; color: #64748b; text-align: center; }
+</style>
+</head>
+<body>
+<div class='Section1'>
+
+<h1 class='doc-title'>${escapeHtml(project.name || 'Patent2Market Venture Plan')}</h1>
+<div class='doc-subtitle'>Commercial Venture Plan &amp; Patent Integration Blueprint</div>
+<div class='attribution'>Conceptualization and development: Professor Babu George (<a href='https://www.linkedin.com/in/beingbabu/'>LinkedIn Profile</a>) · Built with Patent2Market Venture Studio</div>
+
+<div class='callout'>
+  <p style='margin:0 0 6pt 0;'><strong>Target Problem:</strong> ${escapeHtml(project.problem || 'Not specified')}</p>
+  <p style='margin:0 0 6pt 0;'><strong>Customer Solution:</strong> ${escapeHtml(project.offer || project.concept || 'Not specified')}</p>
+  <p style='margin:0;'><strong>Operating Territory:</strong> ${escapeHtml(project.country || 'Not specified')} (${escapeHtml(project.geography || 'Primary region')}) &nbsp;|&nbsp; <strong>Target Sector:</strong> ${escapeHtml(project.sector || 'Not specified')}</p>
+</div>
+
+${patents.length ? `
+<h2>Multi-Patent Technology Architecture (${patents.length} Sourced Leads)</h2>
+<table class='data-table'>
+  <thead>
+    <tr>
+      <th style='width:18%;'>Patent ID</th>
+      <th style='width:32%;'>Title &amp; Subsystem</th>
+      <th style='width:25%;'>Jurisdiction &amp; Status</th>
+      <th style='width:25%;'>Access Basis &amp; Terms</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${patents.map((t, i) => `
+      <tr>
+        <td><strong>[T${i + 1}] ${escapeHtml(t.id)}</strong><br><small class='source-note'>${escapeHtml(t.source || 'Patent source')}</small></td>
+        <td><strong>${escapeHtml(t.title)}</strong><br><small>${escapeHtml(t.category || 'General mechanism')}</small></td>
+        <td>${escapeHtml(t.jurisdiction || 'US')}<br><span class='badge'>${escapeHtml(t.statusLabel || t.access || 'Requires register review')}</span></td>
+        <td>${escapeHtml(costLabel(t))}<br><small><a href='${escapeHtml(t.url)}'>Source link ↗</a></small></td>
+      </tr>
+    `).join('')}
+  </tbody>
+</table>
+` : ''}
+
+${project.financial && project.financial.price ? `
+<h2>Financial Projections &amp; Unit Economics (${curr})</h2>
+<table class='financial-table'>
+  <thead>
+    <tr>
+      <th>Metric</th>
+      <th class='num'>Baseline Assumption</th>
+      <th>Investor Notes &amp; Rationale</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>Unit Selling Price</td><td class='num'><strong>${money(project.financial.price)}</strong></td><td>Direct customer price per unit or service subscription</td></tr>
+    <tr><td>Unit Variable Cost (COGS)</td><td class='num'>${money(project.financial.unitCost)}</td><td>Direct material, assembly, logistics &amp; royalty costs</td></tr>
+    <tr><td>Unit Contribution Margin</td><td class='num'><strong>${money(project.financial.price - project.financial.unitCost)}</strong> (${f.margin !== null ? Math.round(f.margin * 100) + '%' : 'N/A'})</td><td>Gross operating profit generated per unit sold</td></tr>
+    <tr><td>Monthly Fixed Operating Cost</td><td class='num'>${money(project.financial.fixedCost)}</td><td>Salaries, facilities, utilities, software &amp; compliance</td></tr>
+    <tr><td>Monthly Break-Even Volume</td><td class='num'><strong>${f.breakEven !== null ? f.breakEven + ' units/mo' : 'N/A'}</strong></td><td>Volume required to achieve zero net operating loss</td></tr>
+    <tr><td>Upfront Launch / Startup Capex</td><td class='num'>${money(f.startup)}</td><td>Tooling, certification, prototype &amp; legal fees</td></tr>
+    <tr><td>Opening Venture Capital</td><td class='num'>${money(f.capital)}</td><td>Initial equity, grant, or sponsor capital available</td></tr>
+    <tr><td>12-Month Total Revenue</td><td class='num'><strong>${money(f.revenue)}</strong></td><td>Cumulative year 1 gross billings</td></tr>
+    <tr><td>12-Month Net Operating Result</td><td class='num'><strong>${money(f.profit)}</strong></td><td>Year 1 bottom-line before taxes and financing</td></tr>
+    <tr><td>Peak Capital Shortfall (Runway Gap)</td><td class='num'><strong>${money(f.fundingGap)}</strong></td><td>Maximum working capital drawdown before cash positive</td></tr>
+  </tbody>
+</table>
+` : ''}
+
+${project.sections.map(s => `
+  <h2>${escapeHtml(s.title)}</h2>
+  ${s.text.split(/\n\s*\n/).filter(Boolean).map(p => `<p>${escapeHtml(p.trim())}</p>`).join('')}
+`).join('')}
+
+<div class='footer-credit'>
+  Commercial Blueprint generated by <strong>Patent2Market</strong><br>
+  Conceptualization and development: <a href='https://www.linkedin.com/in/beingbabu/'>Professor Babu George</a> · Published under MIT License
+</div>
+
+</div>
+</body>
+</html>
+  `.trim();
+}
+
+// 10-Slide Pitch Deck generator for founder presentations
+export function pitchDeckSlides(project) {
+  const f = financials(project.financial);
+  const curr = project.financial.currency || 'USD';
+  const money = n => `${curr} ${Math.round(n).toLocaleString('en-US')}`;
+  const patents = selectedPatents(project);
+
+  return [
+    {
+      num: 1,
+      title: project.name || 'Patent2Market Venture',
+      subtitle: 'Executive Pitch Deck',
+      content: `A commercial venture commercializing verified patent technology for ${project.country || 'emerging markets'}.<br><br><strong>Founder Advantage:</strong> ${project.advantage || 'Deep local execution capability and technical integration.'}`
+    },
+    {
+      num: 2,
+      title: 'The Problem & Market Pain',
+      subtitle: 'Critical Unmet Need',
+      content: `<strong>Observed Friction:</strong> ${project.problem || 'Significant unaddressed cost and efficiency loss in the target market.'}<br><br><strong>Target Customer:</strong> ${project.customer || 'Primary customer segment'}<br><strong>Geography:</strong> ${project.geography || project.country || 'Operating region'}`
+    },
+    {
+      num: 3,
+      title: 'The Solution & Value Proposition',
+      subtitle: 'Engineered for Practical Adoption',
+      content: `<strong>Venture Offering:</strong> ${project.offer || project.concept || 'Turnkey solution package'}<br><br><strong>Core Advantage:</strong> Delivers measurable cost savings and performance superior to manual workarounds without requiring heavy capital investment.`
+    },
+    {
+      num: 4,
+      title: 'Technology & Multi-Patent Architecture',
+      subtitle: 'Grounded in Real Intellectual Property',
+      content: patents.length ? patents.map((t, i) => `<strong>[T${i + 1}] ${t.title}</strong> (${t.id})<br>Role: ${t.category || 'Core Subsystem'} · Status: ${t.statusLabel || t.access || 'Active'}<br>`).join('<br>') : 'Proprietary engineering architecture combined with open industry standards.'
+    },
+    {
+      num: 5,
+      title: 'Business Model & Unit Economics',
+      subtitle: 'Healthy Unit Margins from Day One',
+      content: `<strong>Price per Unit:</strong> ${money(project.financial.price)}<br><strong>Unit COGS:</strong> ${money(project.financial.unitCost)}<br><strong>Gross Margin:</strong> ${f.margin !== null ? Math.round(f.margin * 100) + '%' : 'N/A'}<br><strong>Monthly Break-Even:</strong> ${f.breakEven !== null ? f.breakEven + ' units/month' : 'N/A'}`
+    },
+    {
+      num: 6,
+      title: 'Go-to-Market & Distribution',
+      subtitle: 'Low-CAC Channel Strategy',
+      content: `<strong>Initial Distribution Channel:</strong> ${project.channel || 'Direct partnership with established local distributors and sector associations.'}<br><br><strong>Phase 1 Cohort:</strong> 5 paid pilot customer installations with clear success criteria.`
+    },
+    {
+      num: 7,
+      title: 'Operations & Local Assembly',
+      subtitle: 'Resilient Supply Chain',
+      content: `<strong>Assembly Strategy:</strong> Modular sub-assembly utilizing dual-sourced components and local maintenance partners.<br><br><strong>Operating Constraints:</strong> ${project.constraints || 'Designed for rugged operating environments and easy field repair.'}`
+    },
+    {
+      num: 8,
+      title: 'Risks & 7-Day Validation Tests',
+      subtitle: 'Falsifying Critical Assumptions',
+      content: `<strong>Priority Risk:</strong> Customer willingness to pay and field maintenance reliability.<br><br><strong>First Critical Experiment:</strong> Prototype demonstration benchmarking performance vs. existing competitor under local weather/operating conditions.`
+    },
+    {
+      num: 9,
+      title: '90-Day Execution Roadmap',
+      subtitle: 'Milestone-Based Launch Sequencing',
+      content: `<strong>Month 1:</strong> 15 customer discovery interviews & supplier component quotes.<br><strong>Month 2:</strong> Operational proof-of-concept demonstrator & standard certification review.<br><strong>Month 3:</strong> 3-customer paid field pilot & commercial go/no-go audit.`
+    },
+    {
+      num: 10,
+      title: 'Financial Ask & Growth Plan',
+      subtitle: 'Capital Requirements & Milestones',
+      content: `<strong>Initial Capital:</strong> ${money(f.capital)} (Launch capex: ${money(f.startup)})<br><strong>Year 1 Revenue Target:</strong> ${money(f.revenue)}<br><strong>Year 1 Operating Profit:</strong> ${money(f.profit)}<br><br><small>Conceptualization & Development: Professor Babu George</small>`
+    }
+  ];
+}
