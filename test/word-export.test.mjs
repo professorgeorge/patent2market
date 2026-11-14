@@ -56,6 +56,19 @@ test('buildDocx creates authentic Office OpenXML .docx with all required parts',
   assert.match(rawText, /\[Content_Types\]\.xml/);
   assert.match(rawText, /FreshVault Kenya/);
   assert.match(rawText, /Professor Babu George/);
+
+  // Validate XML tag balance inside the document container
+  const openT = (rawText.match(/<w:t(?:\s[^>]*)?>/g) || []).length;
+  const closeT = (rawText.match(/<\/w:t>/g) || []).length;
+  assert.equal(openT, closeT, `Mismatched <w:t> tags: ${openT} opened vs ${closeT} closed`);
+
+  const openR = (rawText.match(/<w:r(?:\s[^>]*)?>/g) || []).length;
+  const closeR = (rawText.match(/<\/w:r>/g) || []).length;
+  assert.equal(openR, closeR, `Mismatched <w:r> tags: ${openR} opened vs ${closeR} closed`);
+
+  const openP = (rawText.match(/<w:p(?:\s[^>]*)?>/g) || []).length;
+  const closeP = (rawText.match(/<\/w:p>/g) || []).length;
+  assert.equal(openP, closeP, `Mismatched <w:p> tags: ${openP} opened vs ${closeP} closed`);
 });
 
 test('generateWordHtml outputs rich MSO HTML with styled tables and attribution', () => {

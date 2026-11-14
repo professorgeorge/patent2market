@@ -52,9 +52,10 @@ export function createZip(files) {
     cdView.setUint32(0, 0x02014b50, true);
     cdView.setUint16(4, 20, true);
     cdView.setUint16(6, 20, true);
-    cdView.setUint16(8, 0, true);
-    cdView.setUint16(10, 0x4000, true); // DOS time: 08:00:00
-    cdView.setUint16(12, 0x5821, true); // DOS date: 2024-01-01
+    cdView.setUint16(8, 0, true); // general purpose bit flag
+    cdView.setUint16(10, 0, true); // compression method: 0 = stored (no compression)
+    cdView.setUint16(12, 0x4000, true); // DOS time: 08:00:00
+    cdView.setUint16(14, 0x5821, true); // DOS date: 2024-01-01
     cdView.setUint32(16, f.crc, true);
     cdView.setUint32(20, f.size, true);
     cdView.setUint32(24, f.size, true);
@@ -195,9 +196,9 @@ export function buildDocx(project) {
       '<w:r><w:rPr><w:b/></w:rPr><w:t>Gross Margin: </w:t></w:r><w:r><w:t>' + (f.margin !== null ? Math.round(f.margin * 100) + '%' : 'N/A') + '   |   </w:t></w:r>' +
       '<w:r><w:rPr><w:b/></w:rPr><w:t>Monthly Break-Even: </w:t></w:r><w:r><w:t>' + (f.breakEven !== null ? f.breakEven + ' units/mo' : 'N/A') + '</w:t></w:r></w:p>';
     docBody += '<w:p><w:pPr><w:spacing w:before="40" w:after="160"/></w:pPr>' +
-      '<w:r><w:rPr><w:b/></w:rPr><w:t>Year 1 Revenue: </w:t></w:r><w:r><w:t>' + money(f.revenue) + '   |   </w:r>' +
-      '<w:r><w:rPr><w:b/></w:rPr><w:t>Operating Result: </w:t></w:r><w:r><w:t>' + money(f.profit) + '   |   </w:r>' +
-      '<w:r><w:rPr><w:b/></w:rPr><w:t>Launch Capital: </w:t></w:r><w:r><w:t>' + money(f.capital) + '   |   </w:r>' +
+      '<w:r><w:rPr><w:b/></w:rPr><w:t>Year 1 Revenue: </w:t></w:r><w:r><w:t>' + money(f.revenue) + '   |   </w:t></w:r>' +
+      '<w:r><w:rPr><w:b/></w:rPr><w:t>Operating Result: </w:t></w:r><w:r><w:t>' + money(f.profit) + '   |   </w:t></w:r>' +
+      '<w:r><w:rPr><w:b/></w:rPr><w:t>Launch Capital: </w:t></w:r><w:r><w:t>' + money(f.capital) + '   |   </w:t></w:r>' +
       '<w:r><w:rPr><w:b/></w:rPr><w:t>Peak Funding Shortfall: </w:t></w:r><w:r><w:t>' + money(f.fundingGap) + '</w:t></w:r></w:p>';
   }
 
