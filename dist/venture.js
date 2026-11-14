@@ -80,7 +80,7 @@ function save(){p.updatedAt=new Date().toISOString();try{localStorage.setItem(ST
 function modal(html){$('#modal-body').innerHTML=html;$('#modal').showModal();}
 function field(key,label,placeholder='',type='text',value=p[key]){return `<div class="field"><label for="field-${key}">${label}</label>${type==='textarea'?`<textarea id="field-${key}" data-field="${key}" rows="4" maxlength="12000" >${escape(value)}</textarea>`:`<input id="field-${key}" data-field="${key}" type="${type}" maxlength="500" value="${escape(value)}" >`}</div>`;}
 function head(number,title,copy){return `<div class="page-head"><span class="eyebrow">${number} / ${labels[number-1].toUpperCase()}</span><h2>${title}</h2><p>${copy}</p></div>`;}
-function actions(){return `<div class="section-actions">${step?'<button class="secondary" data-back>← Previous step</button>':'<span class="small muted">Start rough. You can refine everything later.</span>'}${step<5?`<button class="primary" data-next>${['Explore technologies','Shape the offer','Build the evidence','Explore the numbers','Build my plan'][step]} →</button>`:''}</div>`;}
+function actions(){return `<div class="section-actions">${step?'<button class="secondary" data-back>← Previous step</button>':'<span class="small muted">Start rough. You can refine everything later.</span>'}${step<5?`<button class="primary" data-next>${['Explore technologies','Shape the offer','Build the evidence','Explore the numbers','Build my plan'][step]} →</button>`:(p.sections.length?`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><button class="primary" data-export-docx>Download Word (.docx) ↓</button><button class="secondary" data-pitch-deck>10-Slide Pitch Deck ❖</button></div>`:'<button class="primary" data-ai-plan>✧ Draft Plan with AI</button>')}</div>`;}
 function summary(){const completed=[!!p.problem,!!p.technology,!!p.offer,!!p.evidence.length,false,!!p.sections.length];$('#steps').innerHTML=labels.map((label,i)=>`<button class="step ${i===step?'active':''} ${completed[i]?'done':''}" data-step="${i}" ${i===step?'aria-current="step"':''}><span class="step-num">${completed[i]?'✓':i+1}</span>${label}</button>`).join('');$('#project-summary').innerHTML=`<div class="summary-row"><strong>PROJECT</strong>${escape(p.name)}</div><div class="summary-row"><strong>WHO YOU WANT TO HELP</strong>${escape(p.customer||'Still taking shape')}</div><div class="summary-row"><strong>TECHNOLOGY LEAD</strong>${escape(selectedPatents(p).map(t=>t.title).join(' + ')||'Not chosen yet')}</div><div class="summary-row"><strong>EVIDENCE</strong>${p.evidence.length} source${p.evidence.length===1?'':'s'} recorded · ${missingEvidence(p).length} gaps to explore</div><div class="summary-row"><strong>BUSINESS PLAN</strong>${p.sections.length?'Draft created · review and refine':'Not drafted yet'}</div>`;}
 function render(){summary();const c=coach[step];$('#coach-title').textContent=c[0];$('#coach-copy').textContent=c[1];$('#coach-action').textContent='✧ '+c[3];$('#coach-action').disabled=aiBusy;$('#coach-output').innerHTML=aiHTML(p.aiResults[c[2]]?.result);const views=[problemView,technologyView,offerView,evidenceView,numbersView,planView];$('#content').innerHTML=views[step]()+actions();if(step===1)renderTechnologies();if(step===4)updateNumbers();}
 function problemView(){return head(1,'What needs to change?','Describe your opportunity and where the business will operate.')+`
@@ -197,16 +197,30 @@ function technologyView(){return head(2,'Source the technology.','Choose a sourc
  <button class="secondary" data-import-tech>Add a sourced patent or open design</button>
  <p class="small muted">${escape(sourceScope||'Ready to search live patent databases.')}</p>
 </div>
-<div class="panel"><h3>Selected technologies · ${selectedPatents(p).length}/6</h3>
-${renderArchitectureCanvas(selectedPatents(p))}
-${selectedPatents(p).map((t,i)=>`<div class="evidence-item"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;"><strong>[T${i+1}] ${escape(t.title)}</strong><span class="status-pill ${t.access==='expired'?'inactive':'active'}">${escape(t.statusLabel||t.access||'Status unknown')}</span></div><p>${escape(t.id)} · ${escape(t.jurisdiction||'Territory not recorded')} · ${escape(t.source||'Patent database')}</p><p class="small">${escape(costLabel(t))}</p><div style="display:flex;gap:8px;margin-top:8px;"><button class="secondary" data-access="${i}">Review document, rights & costs</button><button class="quiet" data-remove-tech="${i}">Remove</button></div></div>`).join('')||'<p>No technologies selected yet. Run a search above or launch Autopilot.</p>'}
-<div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;">
- <button class="primary" data-autopilot ${aiBusy?'disabled':''}>Propose a solution with AI</button>
- <button class="secondary" data-auto-multi-patent ${aiBusy?'disabled':''}>✧ Auto-select 2-3 complementary patents</button>
- <button class="secondary" data-full-autopilot ${aiBusy?'disabled':''}>🚀 Run End-to-End Autopilot</button>
+
+<div class="panel">
+ <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+  <h3 style="margin:0;">Sourced Patent Leads</h3>
+  <span class="small muted" id="tech-count"></span>
+ </div>
+ <div id="tech-results"></div>
+ <button class="secondary" id="tech-more" style="margin-top:14px;">Show more leads</button>
 </div>
-<p class="small">AI searches the selected integrated source, or uses your sourced documents. You review before accepting.</p></div>
-<p class="small muted" id="tech-count"></p><div id="tech-results"></div><button class="secondary" id="tech-more">Show more</button>`;}
+
+<div class="panel">
+ <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+  <h3 style="margin:0;">Selected technologies · ${selectedPatents(p).length}/6</h3>
+  <span class="small muted">${selectedPatents(p).length?'Ingredients coupled into your venture':'Select 1 to 6 ingredients from above'}</span>
+ </div>
+ ${renderArchitectureCanvas(selectedPatents(p))}
+ ${selectedPatents(p).map((t,i)=>`<div class="evidence-item"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;"><strong>[T${i+1}] ${escape(t.title)}</strong><span class="status-pill ${t.access==='expired'?'inactive':'active'}">${escape(t.statusLabel||t.access||'Status unknown')}</span></div><p>${escape(t.id)} · ${escape(t.jurisdiction||'Territory not recorded')} · ${escape(t.source||'Patent database')}</p><p class="small">${escape(costLabel(t))}</p><div style="display:flex;gap:8px;margin-top:8px;"><button class="secondary" data-access="${i}">Review document, rights & costs</button><button class="quiet" data-remove-tech="${i}">Remove</button></div></div>`).join('')||'<p class="small muted">No technologies selected yet. Click <strong>+ Add ingredient</strong> on any patent lead above, or use the auto-select assistant below.</p>'}
+ <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;">
+  <button class="primary" data-autopilot ${aiBusy?'disabled':''}>Propose a solution with AI</button>
+  <button class="secondary" data-auto-multi-patent ${aiBusy?'disabled':''}>✧ Auto-select 2-3 complementary patents</button>
+  <button class="secondary" data-import-tech>+ Add custom patent / design</button>
+ </div>
+ <p class="small muted" style="margin-top:10px;">AI searches the selected integrated source, or uses your sourced documents. You review before accepting.</p>
+</div>`;}
 function renderTechnologies(){
  const allRanked=matchingPatents();
  const results=allRanked.filter(r=>!selectedSubsystem||(r.record.subsystem||classifySubsystem(r.record))===selectedSubsystem);
@@ -330,19 +344,73 @@ async function runFullAutopilot(){
  finally{clearTimeout(timer);aiBusy=false;$('#cancel-ai').hidden=true;render();}
 }
 function showProposal(){const proposal=pendingProposal;if(!proposal)return;const r=proposal.response.result;modal(`<h2>A proposed solution</h2><span class="badge">AI HYPOTHESIS · YOUR REVIEW</span><p>${escape(r.solution)}</p>${r.components.map(c=>`<h3>${escape(proposal.candidates.find(t=>t.id===c.patentId).title)}</h3><p>${escape(c.role)}</p><blockquote>${escape(c.evidenceQuote)}</blockquote><p><strong>Integration risk:</strong> ${escape(c.integrationRisk)}</p>`).join('')||'<p>This proposal uses no patent from the available candidates.</p>'}<h3>Other ingredients needed</h3><ul>${r.additionalInputs.map(x=>`<li>${escape(x)}</li>`).join('')}</ul><h3>First experiment</h3><p>${escape(r.firstExperiment)}</p><h3>Simpler alternative</h3><p>${escape(r.simplerAlternative)}</p><h3>Your next decisions</h3><ul>${r.nextQuestions.map(x=>`<li>${escape(x)}</li>`).join('')}</ul><p class="small">Accepting replaces your selected technologies and solution concept. Your evidence and financial inputs remain yours to complete.</p><button class="primary" id="accept-proposal">Use this direction</button>`);$('#accept-proposal').onclick=()=>{if(fingerprint(p)!==proposal.started||JSON.stringify([fullTextOnly,onlyReviewed,territory,category,patentSource])!==proposal.filters){notify('The project changed. Generate a fresh proposal.');$('#modal').close();return;}p.technologies=r.components.map(c=>({...proposal.candidates.find(t=>t.id===c.patentId)}));p.technology=p.technologies[0]||null;p.concept=r.solution+'\n\n'+r.components.map(c=>c.patentId+': '+c.role+'; integration risk: '+c.integrationRisk).join('\n')+'\nAdditional inputs: '+r.additionalInputs.join('; ')+'\nFirst experiment: '+r.firstExperiment+'\nSimpler alternative: '+r.simplerAlternative+'\nQuestions: '+r.nextQuestions.join('; ');p.aiResults.synthesis=proposal.response;pendingProposal=null;save();$('#modal').close();go(2);};}
-function offerView(){const concepts=p.aiResults.concepts?.result?.concepts;return head(3,'Turn an invention into an offer.','A patent is one ingredient. The business also needs a useful service, a delivery model, and a clear reason for customers to choose it.')+`${!p.technology?'<div class="notice">You can explore a business without a patent. Describe the technical approach and evidence it needs.</div>':''}${concepts?`<div class="concepts">${concepts.map((c,i)=>{const isSelected=p.offer===c.offer||p.concept===c.mechanism;return `<article class="panel concept ${isSelected?'selected':''}"><div style="display:flex;justify-content:space-between;align-items:center;"><span class="badge">BUSINESS MODEL ${i+1}</span>${isSelected?'<span class="status-pill active">ACTIVE DIRECTION ✓</span>':''}</div><h3 style="margin-top:12px">${escape(c.name)}</h3><p><strong>Offer:</strong> ${escape(c.offer)}</p><div class="label">HOW IT COULD WORK</div><p>${escape(c.mechanism)}</p><div class="label">REVENUE MODEL</div><p>${escape(c.revenue)}</p><div class="label">FIRST TEST</div><p>${escape(c.firstTest)}</p><div class="label">CRITICAL ASSUMPTION</div><p>${escape(c.risk)}</p><button class="${isSelected?'primary':'secondary'}" data-use-concept="${i}">${isSelected?'Active Direction ✓':'Use this direction'}</button></article>`;}).join('')}</div>`:'<div class="notice">Ask your thinking partner for three business concepts, or run Autopilot to formulate them automatically.</div>'}<div class="panel">${field('concept','How could the solution work?','Combine the technology with the service, components, or expertise it would need.','textarea')}${field('offer','What exactly would a customer buy?','A device, a managed service, a subscription, a kit…','textarea')}${field('channel','How would you reach the first customers?','A local partner, direct outreach, an existing distributor…','textarea')}</div>`;}
+function offerView(){const concepts=p.aiResults.concepts?.result?.concepts;return head(3,'Turn an invention into an offer.','A patent is one ingredient. The business also needs a useful service, a delivery model, and a clear reason for customers to choose it.')+`
+${!p.technology?'<div class="notice">You can explore a business without a patent. Describe the technical approach and evidence it needs.</div>':''}
+${concepts?`
+<div class="panel">
+ <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+  <div>
+   <h3 style="margin:0 0 4px 0;">Proposed Business Models</h3>
+   <p style="margin:0;" class="small muted">Select one direction to auto-populate your offer, delivery mechanism, and distribution below.</p>
+  </div>
+  <button class="secondary" data-coach-concepts ${aiBusy?'disabled':''}>✧ Propose 3 alternate directions with AI</button>
+ </div>
+ <div class="concepts">${concepts.map((c,i)=>{const isSelected=p.offer===c.offer||p.concept===c.mechanism;return `<article class="panel concept ${isSelected?'selected':''}"><div style="display:flex;justify-content:space-between;align-items:center;"><span class="badge">BUSINESS MODEL ${i+1}</span>${isSelected?'<span class="status-pill active">ACTIVE DIRECTION ✓</span>':''}</div><h3 style="margin-top:12px">${escape(c.name)}</h3><p><strong>Offer:</strong> ${escape(c.offer)}</p><div class="label">HOW IT COULD WORK</div><p>${escape(c.mechanism)}</p><div class="label">REVENUE MODEL</div><p>${escape(c.revenue)}</p><div class="label">FIRST TEST</div><p>${escape(c.firstTest)}</p><div class="label">CRITICAL ASSUMPTION</div><p>${escape(c.risk)}</p><button class="${isSelected?'primary':'secondary'}" data-use-concept="${i}">${isSelected?'Active Direction ✓':'Use this direction'}</button></article>`;}).join('')}</div>
+</div>`:`
+<div class="panel">
+ <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+  <div>
+   <h3 style="margin:0 0 4px 0;">Formulate Business Directions</h3>
+   <p style="margin:0;" class="small muted">Generate 3 tailored business models based on your selected technology and market context.</p>
+  </div>
+  <button class="primary" data-coach-concepts ${aiBusy?'disabled':''}>✧ Propose 3 business directions with AI</button>
+ </div>
+</div>`}
+<div class="panel">
+ <h3 style="margin-top:0;">Your tailored offer &amp; go-to-market</h3>
+ ${field('concept','How could the solution work?','Combine the technology with the service, components, or expertise it would need.','textarea')}
+ ${field('offer','What exactly would a customer buy?','A device, a managed service, a subscription, a kit…','textarea')}
+ ${field('channel','How would you reach the first customers?','A local partner, direct outreach, an existing distributor…','textarea')}
+</div>`;}
 function evidenceView(){return head(4,'What would make this believable?','Bring in customer conversations, technical findings, supplier quotes, and competitor information. Your plan will distinguish these inputs from untested ideas.')+`
-<div class="panel"><h3>The next evidence to collect</h3><ul class="checklist">${missingEvidence(p).map(g=>`<li>${escape(g)}</li>`).join('')||'<li>Review the quality, date, and independence of your evidence.</li>'}</ul>
-<div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;">
- <button class="secondary" data-add-evidence>+ Add manual evidence</button>
- <button class="primary" data-generate-evidence ${aiBusy?'disabled':''}>⚡ Generate country evidence hypotheses</button>
-</div></div>
-<div class="panel"><h3>Your evidence notebook (${p.evidence.length})</h3>
-${p.evidence.map((e,i)=>`<article class="evidence-item"><div style="display:flex;justify-content:space-between;align-items:center;"><span class="badge">[E${i+1}] · ${escape(e.kind.toUpperCase())}</span><button class="quiet" data-remove-evidence="${i}">✕ Remove</button></div><h4 style="margin-top:8px">${escape(e.title)}</h4><p>${escape(e.note)}</p><div class="small muted">${safeURL(e.url)?`<a href="${escape(safeURL(e.url))}" target="_blank" rel="noopener noreferrer">Source link ↗</a> · `:''}<span>Jurisdiction: ${escape(e.jurisdiction||'General')}</span> · <span>Recorded: ${escape(e.date||'Undated')}</span></div></article>`).join('')||'<p>No evidence recorded yet. Click "Generate country evidence hypotheses" above to automatically generate a baseline evidence plan.</p>'}</div>
-<div class="panel">${field('notes','What else should the plan take into account?','Interview findings, operating context, distribution partners, or unanswered questions. Avoid personal or confidential details you do not need.','textarea')}</div>`;}
+<div class="panel">
+ <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+  <h3 style="margin:0;">Your evidence notebook (${p.evidence.length})</h3>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+   <button class="primary" data-add-evidence>+ Add manual evidence</button>
+   <button class="secondary" data-generate-evidence ${aiBusy?'disabled':''}>⚡ Generate country evidence hypotheses</button>
+  </div>
+ </div>
+ ${p.evidence.map((e,i)=>`<article class="evidence-item"><div style="display:flex;justify-content:space-between;align-items:center;"><span class="badge">[E${i+1}] · ${escape(e.kind.toUpperCase())}</span><button class="quiet" data-remove-evidence="${i}">✕ Remove</button></div><h4 style="margin-top:8px">${escape(e.title)}</h4><p>${escape(e.note)}</p><div class="small muted">${safeURL(e.url)?`<a href="${escape(safeURL(e.url))}" target="_blank" rel="noopener noreferrer">Source link ↗</a> · `:''}<span>Jurisdiction: ${escape(e.jurisdiction||'General')}</span> · <span>Recorded: ${escape(e.date||'Undated')}</span></div></article>`).join('')||'<p class="small muted">No evidence recorded yet. Click <strong>+ Add manual evidence</strong> or <strong>Generate country evidence hypotheses</strong> to populate initial test hypotheses.</p>'}
+</div>
+<div class="panel">
+ <h3 style="margin-top:0;">Evidence gap analysis</h3>
+ <p class="small muted">Key assumptions and validation targets to substantiate your venture in ${escape(p.country||'the target market')}:</p>
+ <ul class="checklist">${missingEvidence(p).map(g=>`<li>${escape(g)}</li>`).join('')||'<li>Review the quality, date, and independence of your evidence.</li>'}</ul>
+</div>
+<div class="panel">
+ <h3 style="margin-top:0;">Additional founder notes &amp; context</h3>
+ ${field('notes','What else should the plan take into account?','Interview findings, operating context, distribution partners, or unanswered questions. Avoid personal or confidential details you do not need.','textarea')}
+</div>`;}
 function numbersView(){const fields=[['price','Price per unit of sale'],['unitCost','Variable cost per unit'],['monthlyUnits','Units sold in month one'],['growth','Monthly volume growth (%)'],['fixedCost','Monthly fixed costs'],['startupCost','Upfront launch cost'],['capital','Available starting capital']];return head(5,'Make the numbers tell a story.','Start with a simple unit of sale: a device, a service visit, or a monthly subscription. Change the assumptions and see what the business would require.')+`
-<div class="notice"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;"><span>${financialInputsComplete(p.financial)?'12-Month financial scenarios are calculated live below.':'Financial inputs are needed to calculate break-even and cash runway.'}</span><button class="secondary" data-auto-financials ${aiBusy?'disabled':''}>⚡ Auto-estimate baseline economics</button></div></div>
-<div class="panel"><div class="form-grid"><div class="field"><label for="currency">Currency</label><select id="currency"><option value="">Choose currency</option>${(Intl.supportedValuesOf?Intl.supportedValuesOf('currency'):['USD','EUR','GBP','INR','CAD','AUD','KES','NGN','ZAR','BRL']).map(c=>`<option ${p.financial.currency===c?'selected':''}>${c}</option>`).join('')}</select></div>${fields.map(([k,l])=>`<div class="field"><label for="number-${k}">${l}</label><input id="number-${k}" type="number" min="0" max="${k==='growth'?100:1000000000}" step="${['monthlyUnits'].includes(k)?'1':'0.01'}" data-number="${k}" value="${p.financial[k]}"></div>`).join('')}</div><div id="financial-output"></div></div><p class="small muted">Excludes taxes, financing, depreciation, inventory timing, capacity constraints, and refunds. Volume scenarios are sensitivity checks, not probabilities or forecasts.</p>`;}
+<div class="panel">
+ <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
+  <div>
+   <h3 style="margin:0 0 4px 0;">Unit economics &amp; financial assumptions</h3>
+   <p style="margin:0;" class="small muted">${financialInputsComplete(p.financial)?'Assumption inputs calibrated · 12-month & 3-year models calculated below':'Complete inputs or use auto-estimate to model cash runway and break-even'}</p>
+  </div>
+  <button class="secondary" data-auto-financials ${aiBusy?'disabled':''}>⚡ Auto-estimate baseline economics</button>
+ </div>
+ <div class="form-grid"><div class="field"><label for="currency">Currency</label><select id="currency"><option value="">Choose currency</option>${(Intl.supportedValuesOf?Intl.supportedValuesOf('currency'):['USD','EUR','GBP','INR','CAD','AUD','KES','NGN','ZAR','BRL']).map(c=>`<option ${p.financial.currency===c?'selected':''}>${c}</option>`).join('')}</select></div>${fields.map(([k,l])=>`<div class="field"><label for="number-${k}">${l}</label><input id="number-${k}" type="number" min="0" max="${k==='growth'?100:1000000000}" step="${['monthlyUnits'].includes(k)?'1':'0.01'}" data-number="${k}" value="${p.financial[k]}"></div>`).join('')}</div>
+</div>
+<div class="panel">
+ <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+  <h3 style="margin:0;">Calculated Financial Projections</h3>
+  <span class="small muted">Live sensitivity analysis</span>
+ </div>
+ <div id="financial-output"></div>
+</div>
+<p class="small muted">Excludes taxes, financing, depreciation, inventory timing, capacity constraints, and refunds. Volume scenarios are sensitivity checks, not probabilities or forecasts.</p>`;}
 function money(n){return new Intl.NumberFormat('en-US',{style:'currency',currency:p.financial.currency,maximumFractionDigits:0}).format(n);}
 function updateNumbers(){
  if(!financialInputsComplete(p.financial)){$('#financial-output').innerHTML='<p class="small">Complete the financial inputs and choose currency to calculate scenarios.</p>';return;}
@@ -411,6 +479,18 @@ function planView(){
   `:''}
 
   ${p.sections.length?'<h1 class="print-only">'+escape(p.name)+'</h1>'+sections:'<div class="empty">Your plan will cover the customer, solution, technology access, market, business model, operations, finances, risks, and a 90-day roadmap.</div>'}
+
+  ${p.sections.length?`
+  <div class="export-tray" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:12px 14px;background:var(--subtle);border:1px solid var(--border);border-radius:6px;margin-top:20px;">
+   <div style="font-size:12px;font-weight:600;color:var(--ink);text-transform:uppercase;letter-spacing:0.5px;">Export &amp; Share Plan:</div>
+   <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+    <button class="primary" data-export-docx>Download Word (.docx) ↓</button>
+    <button class="secondary" data-export-md>Download Markdown (.md) ↓</button>
+    <button class="secondary" data-pitch-deck>10-Slide Pitch Deck ❖</button>
+    <button class="secondary" data-print>Print / Save PDF 🖨</button>
+   </div>
+  </div>
+  `:''}
  </div>`;
 }
 function aiHTML(result){if(!result)return '';const renderValue=(v)=>{if(v===null||v===undefined)return '';if(Array.isArray(v))return '<ul>'+v.map(x=>'<li>'+renderValue(x)+'</li>').join('')+'</ul>';if(typeof v==='object')return Object.entries(v).filter(([k])=>!['sections','concepts'].includes(k)).map(([k,x])=>`<h4>${escape(k.replace(/([A-Z])/g,' $1'))}</h4>${renderValue(x)}`).join('');return '<p>'+escape(v)+'</p>';};return `<div class="ai-result"><span class="badge">AI SUGGESTION · VERIFY</span>${result.concepts?'<p>Three concepts are available in Your offer.</p>':result.sections?'<p>Your plan is ready for review.</p>':renderValue(result)}${result.searchTerms?'<button class="secondary" data-use-search>Use suggested search</button>':''}</div>`;}
@@ -514,7 +594,7 @@ function projectMenu(){modal(`<h2>Your project, your work</h2><p>Projects are st
 $('#steps').onclick=e=>{const b=e.target.closest('[data-step]');if(b)go(Number(b.dataset.step));};
 $('#content').addEventListener('input',e=>{if(e.target.id==='tech-search'){p.query=e.target.value;save();if($('#external-search'))$('#external-search').href=sourceLink();}const key=e.target.dataset.field;if(key){p[key]=e.target.value;save();}const n=e.target.dataset.number;if(n){if(e.target.value===''){p.financial[n]='';save();updateNumbers();return;}const value=Number(e.target.value);if(Number.isFinite(value)&&value>=0&&value<=(n==='growth'?100:1e9)){e.target.setCustomValidity('');p.financial[n]=value;save();updateNumbers();}else{e.target.setCustomValidity('Enter a nonnegative value within the allowed range.');$('#financial-output').innerHTML='<div class="notice warning">Correct the invalid financial input to view scenarios. The previous valid value is still saved.</div>';}}});
 $('#content').addEventListener('change',e=>{if(e.target.id==='patent-source'){patentSource=e.target.value;searchGeneration++;catalog=[];sourceScope='';territory='';pendingProposal=null;render();}if(e.target.id==='tech-category'){category=e.target.value;limit=8;renderTechnologies();}if(e.target.id==='fulltext-only'){fullTextOnly=e.target.checked;renderTechnologies();}if(e.target.id==='tech-territory'){territory=e.target.value;renderTechnologies();}if(e.target.id==='reviewed-only'){onlyReviewed=e.target.checked;renderTechnologies();}if(e.target.id==='currency'){p.financial.currency=e.target.value;save();updateNumbers();}});
-$('#content').onclick=e=>{const b=e.target.closest('button');if(!b)return;const d=b.dataset;if('next'in d){if(step===0&&!p.problem.trim()){notify('Add a short description of the problem to continue.');return;}go(step+1);}if('back'in d)go(step-1);if('fullAutopilot'in d){runFullAutopilot();return;}if('autoFinancials'in d){p.financial=heuristicFinancials(p);save();render();notify('Baseline unit economics calibrated.');return;}if('generateEvidence'in d){p.evidence=heuristicEvidence(p);save();render();notify('Country evidence hypotheses generated.');return;}if(b.id==='search-tech'){p.query=$('#tech-search').value;limit=8;save();renderTechnologies();}if(b.id==='tech-more'){limit+=8;renderTechnologies();}if('autopilot'in d)autopilot();if('sourceSettings'in d)sourceSettings();if('localRequirements'in d)ask('local');if(b.id==='live-search'){p.query=$('#tech-search').value;if(!p.query.trim()){notify('Enter search terms.');return;}save();liveBusy=true;render();searchWorldwide(p.query,AbortSignal.timeout(35000)).then(()=>notify('Fresh results received. Your filters apply to every result.')).catch(err=>notify(err.message)).finally(()=>{liveBusy=false;render();});}if(d.selectTech){const t=availablePatents().find(r=>r.id===d.selectTech);if(selectedPatents(p).length>=6){notify('Use up to six ingredients. Remove one before adding another.');return;}if(t&&!selectedPatents(p).some(x=>x.id===t.id)){p.technologies=[...selectedPatents(p),{...t}];p.technology=p.technologies[0];save();render();}}if('access'in d)accessModal(Number(d.access));if(d.removeTech!==undefined){p.technologies=selectedPatents(p).filter((_,i)=>i!==Number(d.removeTech));p.technology=p.technologies[0]||null;save();render();}if('importTech'in d)importTechnology();if(d.useConcept!==undefined){const c=p.aiResults.concepts.result.concepts[Number(d.useConcept)];p.concept=c.mechanism||c.name;p.offer=c.offer;save();render();notify('Business direction added to your project.');}if('addEvidence'in d)addEvidence();if(d.removeEvidence!==undefined){p.evidence.splice(Number(d.removeEvidence),1);save();render();}if('aiPlan'in d)ask('plan');if('applyTemplate'in d){
+$('#content').onclick=e=>{const b=e.target.closest('button');if(!b)return;const d=b.dataset;if('next'in d){if(step===0&&!p.problem.trim()){notify('Add a short description of the problem to continue.');return;}go(step+1);}if('back'in d)go(step-1);if('fullAutopilot'in d){runFullAutopilot();return;}if('autoFinancials'in d){p.financial=heuristicFinancials(p);save();render();notify('Baseline unit economics calibrated.');return;}if('generateEvidence'in d){p.evidence=heuristicEvidence(p);save();render();notify('Country evidence hypotheses generated.');return;}if(b.id==='search-tech'){p.query=$('#tech-search').value;limit=8;save();renderTechnologies();}if(b.id==='tech-more'){limit+=8;renderTechnologies();}if('autopilot'in d)autopilot();if('sourceSettings'in d)sourceSettings();if('localRequirements'in d)ask('local');if(b.id==='live-search'){p.query=$('#tech-search').value;if(!p.query.trim()){notify('Enter search terms.');return;}save();liveBusy=true;render();searchWorldwide(p.query,AbortSignal.timeout(35000)).then(()=>notify('Fresh results received. Your filters apply to every result.')).catch(err=>notify(err.message)).finally(()=>{liveBusy=false;render();});}if(d.selectTech){const t=availablePatents().find(r=>r.id===d.selectTech);if(selectedPatents(p).length>=6){notify('Use up to six ingredients. Remove one before adding another.');return;}if(t&&!selectedPatents(p).some(x=>x.id===t.id)){p.technologies=[...selectedPatents(p),{...t}];p.technology=p.technologies[0];save();render();}}if('access'in d)accessModal(Number(d.access));if(d.removeTech!==undefined){p.technologies=selectedPatents(p).filter((_,i)=>i!==Number(d.removeTech));p.technology=p.technologies[0]||null;save();render();}if('importTech'in d)importTechnology();if(d.useConcept!==undefined){const c=p.aiResults.concepts.result.concepts[Number(d.useConcept)];p.concept=c.mechanism||c.name;p.offer=c.offer;save();render();notify('Business direction added to your project.');}if('coachConcepts'in d){ask('concepts');return;}if('addEvidence'in d)addEvidence();if(d.removeEvidence!==undefined){p.evidence.splice(Number(d.removeEvidence),1);save();render();}if('aiPlan'in d)ask('plan');if('applyTemplate'in d){
  const tmpl=TEMPLATES[Number(d.applyTemplate)];
  if(tmpl){
   Object.assign(p,tmpl);
@@ -610,7 +690,7 @@ if('exportMd'in d){download((p.name?p.name.toLowerCase().replace(/[^a-z0-9]+/g,'
 if('pitchDeck'in d){showPitchDeck();return;}
 if('filterSubsystem'in d){selectedSubsystem=d.filterSubsystem;renderTechnologies();return;}
 if('exportPlan'in d)download('patent2market-business-plan.md',exportPlan(p),'text/markdown');if('print'in d){document.querySelectorAll('.plan-section').forEach(x=>x.open=true);window.print();}if(d.editSection!==undefined){const i=Number(d.editSection),s=p.sections[i];modal(`<h2>${escape(s.title)}</h2><label for="section-edit">Edit this section</label><textarea id="section-edit" rows="16" maxlength="20000">${escape(s.text)}</textarea><button class="primary" id="save-section">Save section</button>`);$('#save-section').onclick=()=>{s.text=$('#section-edit').value;s.origin='User-edited · review evidence';save();$('#modal').close();render();};}};
-$('#content').addEventListener('keydown',e=>{if(e.target.id==='tech-search'&&e.key==='Enter'){e.preventDefault();const action=$('#external-search')||$('#live-search');if(action&&!action.disabled)action.click();}});
+$('#content').addEventListener('keydown',e=>{if(e.target.id==='tech-search'&&e.key==='Enter'){e.preventDefault();const live=$('#live-search');if(live&&!live.disabled){live.click();return;}const local=$('#search-tech');if(local&&!local.disabled){local.click();return;}const ext=$('#external-search');if(ext)ext.click();}});
 $('#coach-action').onclick=()=>ask(coach[step][2]);$('#cancel-ai').onclick=()=>controller?.abort();$('#ai-settings').onclick=aiSettings;$('#close-modal').onclick=()=>$('#modal').close();$('#project-menu').onclick=projectMenu;
 $('#coach-output').onclick=e=>{if(e.target.closest('[data-use-search]')){p.query=String(p.aiResults.clarify.result.searchTerms);save();go(1);}};
 $('#import-file').onchange=async e=>{const file=e.target.files[0];e.target.value='';if(!file)return;if(file.size>2000000){notify('Project file is too large (maximum 2 MB).');return;}try{const imported=validateProject(JSON.parse(await file.text()));modal(`<h2>Import ${escape(imported.name)}?</h2><p>This replaces the current workspace. Download your current project first if you need to retain it.</p><button class="primary" id="confirm-import">Replace workspace with imported project</button>`);$('#confirm-import').onclick=()=>{controller?.abort();p=imported;step=0;planInput=null;catalog=[];patentSource='';sourceScope='';pendingProposal=null;searchGeneration++;save();$('#modal').close();render();notify('Project imported');};}catch(error){notify(error.message||'Could not read this project.');}};
